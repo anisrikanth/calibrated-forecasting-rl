@@ -118,6 +118,22 @@ def test_parse_value(text, expected):
     assert parse_value(text) == expected
 
 
+@pytest.mark.parametrize("raw,expected", [
+    ("178,000", "178,000"), ("-23000", "-23,000"), ("162000", "162,000"), ("64.00", "64"),
+    ("0.3", "0.3"), ("0.3%", "0.3%"), ("4.25", "4.25"), ("Hold", "Hold"),
+])
+def test_format_value(raw, expected):
+    from data.pull_kalshi import format_value
+    assert format_value(raw) == expected
+
+
+def test_context_labels_drop_trailing_question_marks():
+    from data.pull_kalshi import collect_context_events
+    m = {"event_ticker": "KXP-26MAR", "expiration_value": "178000", "settlement_ts": "2026-04-03T13:00:00Z"}
+    out = collect_context_events([{"market": m}], {"KXP-26MAR": {"title": "Jobs numbers in Mar 2026? "}}, "KXP", "P")
+    assert out[0]["label"] == "Jobs numbers in Mar 2026" and out[0]["value"] == "178,000"
+
+
 def test_context_excludes_results_settled_at_or_after_question_time():
     from data.pull_kalshi import attach_context
     q = pd.DataFrame([{"market_ticker": "M", "event_ticker": "E9", "series_ticker": "S", "family": "F",

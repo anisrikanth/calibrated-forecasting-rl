@@ -1,0 +1,5 @@
+# Keep LF line endings everywhere (the repo is used from WSL and Windows; this stops the
+# "LF will be replaced by CRLF" warnings and keeps shell scripts runnable).
+* text=auto eol=lf
+*.ipynb text eol=lf
+*.zip binary

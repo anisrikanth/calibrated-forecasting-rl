@@ -201,6 +201,17 @@ def parse_value(text: Any) -> float | None:
         return None
 
 
+def format_value(raw: Any) -> str:
+    """Consistent display of a result. Kalshi mixes "178,000", "-23000" and "64.00"; this gives
+    "178,000", "-23,000" and "64". Keeps a trailing "%"; non-numeric text is returned as is."""
+    s = str(raw).strip()
+    num = parse_value(s)
+    if num is None:
+        return s
+    text = f"{int(num):,}" if num.is_integer() else f"{num:,.4f}".rstrip("0").rstrip(".")
+    return text + ("%" if s.endswith("%") else "")
+
+
 def collect_context_events(records: list[dict], events: dict, series_ticker: str, family: str) -> list[dict]:
     """One entry per settled event: its actual result (`expiration_value`, the same on every
     market of the event) and when it settled. Settlement comes after the public release, so
@@ -221,8 +232,8 @@ def collect_context_events(records: list[dict], events: dict, series_ticker: str
             "series_ticker": series_ticker,
             "event_ticker": event_ticker,
             "suffix": event_ticker[len(series_ticker):] if event_ticker.startswith(series_ticker) else event_ticker,
-            "label": event.get("title") or m.get("title") or event_ticker,
-            "value": str(value).strip(),
+            "label": (event.get("title") or m.get("title") or event_ticker).strip().rstrip("?").strip(),
+            "value": format_value(value),
             "value_num": parse_value(value),
             "settled": settled,
         }
