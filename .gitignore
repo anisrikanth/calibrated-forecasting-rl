@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Data: rebuilt by the pipeline, not committed (Kalshi terms + size)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Training outputs
+outputs/
+lora*/
+checkpoint-*/
+wandb/
+
+# Secrets and local config
+.env
+kaggle.json
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

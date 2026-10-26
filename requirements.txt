@@ -1,0 +1,8 @@
+# Data pipeline (runs on your laptop)
+requests>=2.31
+pandas>=2.0
+
+# Tests
+pytest>=7.0
+
+# Training dependencies (Unsloth, vLLM, TRL) are installed inside the Kaggle notebooks.
