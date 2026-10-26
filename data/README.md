@@ -24,9 +24,9 @@ Rough timing at the default ~5 requests/second: economic series take a few minut
 | Step | Output | Notes |
 | --- | --- | --- |
 | `discover` | `raw/series_catalog.csv` | Lists series in the Economics and Climate and Weather categories |
-| `markets` | `raw/markets/<SERIES>.jsonl`, `raw/events/<SERIES>.json` | Settled markets closing on/after `--since` (default 2024-01-01). Merges Kalshi's live and historical tiers by ticker |
-| `prices` | `raw/prices.csv` | Benchmark price at question time from hourly candlesticks |
-| `build` | `processed/markets.csv`, `processed/summary.txt` | One row per market, with outcome and split |
+| `markets` | `raw/markets/<SERIES>.jsonl`, `raw/events/<SERIES>.json` | Settled markets closing on/after `--since` (default 2024-01-01), plus the 400 days before it as context only (`--context-lookback-days`). Merges Kalshi's live and historical tiers by ticker |
+| `prices` | `raw/prices.csv` | Benchmark price at question time from hourly candlesticks (question markets only) |
+| `build` | `processed/markets.csv`, `processed/summary.txt` | One row per market, with outcome, context and split |
 
 ## Key choices (and where to change them)
 
@@ -36,6 +36,7 @@ Rough timing at the default ~5 requests/second: economic series take a few minut
 - **Series and duplicates:** every series is pulled under both its KX ticker and its older ticker (e.g. `KXCPI` and `CPI`), which share a `family`. If the same question appears under both, `build` keeps the KX copy.
 - **Splits:** weather series all go to `heldout`. Economic events (ladders) are sorted by their last close time: oldest 70% train, next 15% val, newest 15% test. Every threshold of the same event stays in the same split, and events closing on the same day (e.g. CPI and core CPI) always share a split.
 - **Outcomes:** `result` of "yes" → 1, "no" → 0. Scalar or voided markets are dropped (counted under "Skipped" in the summary).
+- **Context:** each question gets the most recent actual results from the same family (6 for economic series, 7 for daily temperatures), taken from Kalshi's `expiration_value` on earlier events. A result is only included if its event **settled strictly before the question time**; settlement comes after the public release, so this is conservative. For weather, that usually means yesterday's high isn't in yet at 7am, so the context runs through the day before. The summary's leakage audit counts any context entry dated at or after its question time and should always read 0.
 
 ## `processed/markets.csv` columns
 
@@ -54,8 +55,11 @@ Rough timing at the default ~5 requests/second: economic series take a few minut
 | `market_prob`, `market_prob_source` | Benchmark probability and how it was chosen (`mid`, `last_trade`, `wide_quote_only`, `no_candles`) |
 | `price_ts` | Unix end time of the candle the price came from |
 | `source` | `live` or `historical` Kalshi tier |
+| `context_json` | Earlier results as a list of `{"label", "value", "settled"}`, oldest first |
+| `context_text` | The same, rendered as text for the prompt |
+| `n_context`, `context_latest_settled` | How many results; when the newest one settled (for the leakage audit) |
 | `split` | `train`, `val`, `test`, or `heldout` |
 
-## Not built yet
+## Possible additions
 
-Context snapshots (previous releases, consensus forecasts, archived weather forecasts) are the next piece of Phase 1. They'll be keyed on `question_time`, so nothing dated after it can reach the model.
+Context is currently each series' own recent results. Richer context (consensus forecasts for economic releases, archived weather forecasts) would need outside data sources; it's an option if the model plateaus.

@@ -109,6 +109,29 @@ def test_to_utc_handles_mixed_fractional_seconds():
     assert out[1].microsecond == 932309
 
 
+@pytest.mark.parametrize("text,expected", [
+    ("29,000", 29000.0), ("64.00", 64.0), ("0.3%", 0.3), ("-12,000", -12000.0),
+    ("Hold", None), ("", None), (None, None),
+])
+def test_parse_value(text, expected):
+    from data.pull_kalshi import parse_value
+    assert parse_value(text) == expected
+
+
+def test_context_excludes_results_settled_at_or_after_question_time():
+    from data.pull_kalshi import attach_context
+    q = pd.DataFrame([{"market_ticker": "M", "event_ticker": "E9", "series_ticker": "S", "family": "F",
+                       "question_time": "2024-05-01T12:00:00+00:00"}])
+    ctx = pd.DataFrame([
+        {"family": "F", "series_ticker": "S", "event_ticker": f"E{i}", "suffix": f"E{i}", "label": f"L{i}",
+         "value": str(i), "value_num": float(i), "settled": ts(s)}
+        for i, s in enumerate(["2024-04-01", "2024-05-01 11:59", "2024-05-01 12:00", "2024-05-02"])
+    ])
+    out = attach_context(q, ctx, {"S": 6}).iloc[0]
+    assert [c["value"] for c in json.loads(out["context_json"])] == ["0", "1"]
+    assert out["context_latest_settled"].startswith("2024-05-01T11:59")
+
+
 def test_question_text_prefers_rules():
     m = {"rules_primary": "  If payrolls exceed 125,000, resolves Yes. ", "yes_sub_title": "Above 125k"}
     assert build_question_text(m, {"title": "Jobs"}) == "If payrolls exceed 125,000, resolves Yes."
@@ -173,10 +196,10 @@ def ts(s):
     return pd.Timestamp(s, tz=UTC)
 
 
-def make_market(ticker, event, close, result="yes", open_days=10, strike=100):
+def make_market(ticker, event, close, result="yes", open_days=10, strike=100, value=None):
     close_t = ts(close)
     return {
-        "ticker": ticker, "event_ticker": event, "result": result,
+        "ticker": ticker, "event_ticker": event, "result": result, "expiration_value": value,
         # Some open times carry fractional seconds, as real Kalshi data does
         "open_time": (close_t - pd.Timedelta(days=open_days, microseconds=932309 if strike == 200 else 0)).isoformat(),
         "close_time": close_t.isoformat(),
@@ -193,19 +216,21 @@ class FakeClient:
             close = (ts("2024-01-12 13:30") + pd.DateOffset(months=i)).isoformat()
             ev = f"SER-24M{i:02d}"
             events[ev] = {"event_ticker": ev, "title": f"Value in month {i}"}
-            low = make_market(f"{ev}-T100", ev, close, "yes", strike=100)
-            high = make_market(f"{ev}-T200", ev, close, "no", strike=200)
+            value = f"{(i + 1) * 1000:,}"          # "1,000", "2,000", ... like Kalshi's strings
+            low = make_market(f"{ev}-T100", ev, close, "yes", strike=100, value=value)
+            high = make_market(f"{ev}-T200", ev, close, "no", strike=200, value=value)
             (econ_hist if i < 5 else econ_live).extend([low, high])
         # Same ticker in both tiers: live copy should win.
         dup = dict(econ_hist[0], rules_primary="LIVE COPY")
         econ_live.append(dup)
-        # Closed before the cutoff: filtered out.
-        econ_hist.append(make_market("SER-23DEC-T100", "SER-23DEC", "2023-12-12 13:30"))
+        # Closed before the cutoff: not a question, but its result is context for January 2024.
+        econ_hist.append(make_market("SER-23DEC-T100", "SER-23DEC", "2023-12-12 13:30", value="500"))
         events["SER-23DEC"] = {"event_ticker": "SER-23DEC", "title": "Old"}
         # Scalar result: dropped at build.
         econ_live.append(make_market("SER-24M09-T300", "SER-24M09", econ_live[-2]["close_time"], "scalar"))
 
-        wx = [make_market(f"WX-24JUL0{d}-B80", f"WX-24JUL0{d}", f"2024-07-0{d} 23:59", "yes", open_days=1)
+        wx = [make_market(f"WX-24JUL0{d}-B80", f"WX-24JUL0{d}", f"2024-07-0{d} 23:59", "yes", open_days=1,
+                          value=f"8{d}.00")
               for d in range(1, 4)]
         # Older-name copy of one SER question (same family): should be dropped as a duplicate.
         legacy = dict(econ_hist[2], ticker="OLD" + econ_hist[2]["ticker"][3:],
@@ -257,14 +282,15 @@ def test_pipeline_end_to_end(tmp_path):
     logs = []
 
     counts = pull_markets(client, CFG, raw, SINCE, log=logs.append)
-    assert counts == {"SER": 21, "OLD": 1, "WX": 3}  # SER: 20 + 1 scalar; the 2023 market is filtered
+    assert counts == {"SER": 22, "OLD": 1, "WX": 3}  # SER: 20 + 1 scalar + the Dec 2023 context-only market
     assert any("[skip] MISSING" in line for line in logs)
     records = [json.loads(l) for l in (raw / "markets" / "SER.jsonl").read_text().splitlines()]
     dup = next(r for r in records if r["market"]["ticker"] == "SER-24M00-T100")
     assert dup["source"] == "live" and dup["market"]["rules_primary"] == "LIVE COPY"
 
-    prices = pull_prices(client, CFG, raw, log=logs.append)
-    assert len(prices) == 25
+    prices = pull_prices(client, CFG, raw, since=SINCE, log=logs.append)
+    assert len(prices) == 25                         # the context-only 2023 market isn't priced
+    assert "SER-23DEC-T100" not in set(prices["market_ticker"])
     hist_calls = {t for t, h in client.candle_calls if h}
     assert "SER-24M01-T100" in hist_calls and "SER-24M00-T100" not in hist_calls
 
@@ -284,7 +310,24 @@ def test_pipeline_end_to_end(tmp_path):
     assert wx["market_prob"].isna().all()
     assert wx["qt_clamped"].astype(str).eq("False").all()   # open 24h, horizon 18h: no clamp
 
+    # Context: earlier results of the same family, settled before the question time
+    ctx = df.set_index("market_ticker")
+    first = json.loads(ctx.loc["SER-24M00-T100", "context_json"])
+    assert [c["value"] for c in first] == ["500"]                          # December 2023 only
+    sixth = json.loads(ctx.loc["SER-24M06-T100", "context_json"])
+    assert [c["value"] for c in sixth] == ["1,000", "2,000", "3,000", "4,000", "5,000", "6,000"]  # capped at 6
+    assert ctx.loc["SER-24M06-T100", "n_context"] == 6
+    assert "- Value in month 5: 6,000" in ctx.loc["SER-24M06-T100", "context_text"]
+    third = json.loads(ctx.loc["SER-24M02-T100", "context_json"])
+    assert [c["value"] for c in third] == ["500", "1,000", "2,000"]        # legacy duplicate of month 1 dropped
+    assert list(ctx.loc[["WX-24JUL01-B80", "WX-24JUL02-B80", "WX-24JUL03-B80"], "n_context"]) == [0, 1, 2]
+    assert ctx.loc["WX-24JUL01-B80", "context_text"].startswith("No earlier results")
+    for _, r in df.iterrows():                                             # nothing from after the question
+        for c in json.loads(r["context_json"]):
+            assert ts(c["settled"]) < ts(r["question_time"])
+
     summary = (processed / "summary.txt").read_text()
+    assert "Leakage audit: 0 questions" in summary
     assert "Markets: 23" in summary and "no yes/no result: 1" in summary
     assert "same question under KX and older ticker: 1" in summary
     saved = pd.read_csv(processed / "markets.csv")

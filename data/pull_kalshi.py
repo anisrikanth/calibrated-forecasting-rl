@@ -5,10 +5,11 @@ cached under data/raw/cache/, so an interrupted run picks up where it stopped.
 
   discover  list series in the categories we care about        -> data/raw/series_catalog.csv
   markets   settled markets and their events, per series          -> data/raw/markets/<SERIES>.jsonl
-                                                                      data/raw/events/<SERIES>.json
+            (plus ~13 months before --since, used only as context)    data/raw/events/<SERIES>.json
   prices    market price at each question time (hourly candles)  -> data/raw/prices.csv
   build     one row per market: question, outcome, benchmark
-            price, date-based split                               -> data/processed/markets.csv
+            price, context (earlier results public before the
+            question time), date-based split                      -> data/processed/markets.csv
                                                                       data/processed/summary.txt
   all       markets, then prices, then build
 
@@ -31,6 +32,7 @@ from data.kalshi_client import DEFAULT_BASE_URL, KalshiClient, NotFound
 from data.series import DISCOVER_CATEGORIES, HELDOUT_GROUPS, SERIES, SINCE_DEFAULT
 
 Log = Callable[[str], None]
+DEFAULT_CONTEXT_N = 6   # earlier results shown per question, unless a series sets `context_n`
 PRICE_FIELDS = ["yes_bid", "yes_ask", "spread", "last_trade", "market_prob", "market_prob_source", "price_ts"]
 
 
@@ -187,6 +189,104 @@ def drop_cross_series_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     return d.drop(columns=["_kx_first", "_suffix", "_close_day"]), before - len(d)
 
 
+def parse_value(text: Any) -> float | None:
+    """Kalshi's `expiration_value` -> number: "29,000" -> 29000.0, "64.00" -> 64.0, "0.3%" -> 0.3.
+    Non-numeric values (e.g. "Hold") return None; the text is still shown in the context."""
+    if text is None:
+        return None
+    s = str(text).strip().replace(",", "").rstrip("%").strip()
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def collect_context_events(records: list[dict], events: dict, series_ticker: str, family: str) -> list[dict]:
+    """One entry per settled event: its actual result (`expiration_value`, the same on every
+    market of the event) and when it settled. Settlement comes after the public release, so
+    using it as the "known from" time is conservative."""
+    by_event: dict[str, dict] = {}
+    for record in records:
+        m = record["market"]
+        event_ticker = m.get("event_ticker")
+        value = m.get("expiration_value")
+        if not event_ticker or value in (None, "") or event_ticker in by_event:
+            continue
+        settled = parse_time(m.get("settlement_ts") or m.get("latest_expiration_time") or m.get("expiration_time"))
+        if settled is None:
+            continue
+        event = events.get(event_ticker, {})
+        by_event[event_ticker] = {
+            "family": family,
+            "series_ticker": series_ticker,
+            "event_ticker": event_ticker,
+            "suffix": event_ticker[len(series_ticker):] if event_ticker.startswith(series_ticker) else event_ticker,
+            "label": event.get("title") or m.get("title") or event_ticker,
+            "value": str(value).strip(),
+            "value_num": parse_value(value),
+            "settled": settled,
+        }
+    return list(by_event.values())
+
+
+def attach_context(df: pd.DataFrame, ctx: pd.DataFrame, context_n: dict[str, int]) -> pd.DataFrame:
+    """For each question, the most recent `context_n[series]` results from the same family that
+    settled strictly before its question time. Adds:
+      context_json   list of {"label", "value", "settled"}, oldest first
+      context_text   the same, rendered for a prompt
+      n_context      how many results were found
+      context_latest_settled   settlement time of the newest one (for the leakage audit)"""
+    df = df.copy()
+    empty_text = "No earlier results from this series are available."
+    df["context_json"], df["context_text"] = "[]", empty_text
+    df["n_context"], df["context_latest_settled"] = 0, None
+    if ctx.empty or "question_time" not in df.columns:
+        return df
+
+    # The same result can be listed under a KX ticker and its older ticker: keep one (KX first).
+    ctx = ctx.copy()
+    ctx["_kx_last"] = ~ctx["series_ticker"].str.startswith("KX")
+    ctx["_day"] = to_utc(ctx["settled"]).dt.floor("D")
+    ctx = (ctx.sort_values(["_kx_last", "event_ticker"], kind="stable")
+              .drop_duplicates(["family", "suffix"])
+              .drop_duplicates(["family", "_day", "value"]))
+    ctx["settled"] = to_utc(ctx["settled"])
+
+    # Per family: settlement times (sorted) and the matching context items, built once.
+    by_family = {}
+    for fam, g in ctx.groupby("family"):
+        g = g.sort_values("settled")
+        items = [{"label": r.label, "value": r.value, "settled": r.settled.isoformat(), "_event": r.event_ticker}
+                 for r in g.itertuples()]
+        by_family[fam] = (g["settled"].reset_index(drop=True), items)
+    qt_all = to_utc(df["question_time"])
+
+    json_col, text_col, n_col, latest_col = [], [], [], []
+    for family, series, event, qt in zip(df["family"], df["series_ticker"], df["event_ticker"], qt_all):
+        if family not in by_family or pd.isna(qt):
+            json_col.append("[]"); text_col.append(empty_text); n_col.append(0); latest_col.append(None)
+            continue
+        settled, fam_items = by_family[family]
+        n = context_n.get(series, DEFAULT_CONTEXT_N)
+        cut = int(settled.searchsorted(qt, side="left"))                # strictly before qt
+        items = [{k: v for k, v in it.items() if k != "_event"}
+                 for it in fam_items[max(0, cut - n):cut] if it["_event"] != event]   # belt and braces
+        json_col.append(json.dumps(items))
+        if items:
+            lines = ["Recent results in this series (oldest first; all were public before this question):"]
+            lines += [f"- {it['label']}: {it['value']}" for it in items]
+            text_col.append("\n".join(lines))
+            latest_col.append(items[-1]["settled"])
+        else:
+            text_col.append(empty_text)
+            latest_col.append(None)
+        n_col.append(len(items))
+
+    df["context_json"], df["context_text"] = json_col, text_col
+    df["n_context"], df["context_latest_settled"] = n_col, latest_col
+    return df
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     with path.open() as f:
         return [json.loads(line) for line in f if line.strip()]
@@ -219,12 +319,14 @@ def discover(client: KalshiClient, categories: Iterable[str], raw_dir: Path, log
 
 
 def pull_markets(client: KalshiClient, series_cfg: dict, raw_dir: Path, since: pd.Timestamp,
-                 log: Log = print) -> dict[str, int]:
-    """Settled markets (live and historical tiers, merged by ticker) that closed on or after
-    `since`, plus each series' settled events."""
+                 context_lookback_days: int = 400, log: Log = print) -> dict[str, int]:
+    """Settled markets (live and historical tiers, merged by ticker), plus each series' settled
+    events. Markets closing on/after `since` become questions; markets from the
+    `context_lookback_days` before that are kept only to supply earlier results as context."""
     (raw_dir / "markets").mkdir(parents=True, exist_ok=True)
     (raw_dir / "events").mkdir(parents=True, exist_ok=True)
-    since_ts = int(since.timestamp())
+    keep_from = since - pd.Timedelta(days=context_lookback_days)
+    since_ts = int(keep_from.timestamp())
     counts: dict[str, int] = {}
 
     for series_ticker in series_cfg:
@@ -245,11 +347,12 @@ def pull_markets(client: KalshiClient, series_cfg: dict, raw_dir: Path, since: p
         for m in client.settled_markets_live(series_ticker, min_settled_ts=since_ts):
             merged[m["ticker"]] = {"source": "live", "market": m}
 
-        kept = []
+        kept, n_questions = [], 0
         for record in merged.values():
             close = parse_time(record["market"].get("close_time"))
-            if close is not None and close >= since:
+            if close is not None and close >= keep_from:
                 kept.append(record)
+                n_questions += close >= since
         kept.sort(key=lambda r: (r["market"].get("close_time") or "", r["market"]["ticker"]))
 
         with (raw_dir / "markets" / f"{series_ticker}.jsonl").open("w") as f:
@@ -258,16 +361,16 @@ def pull_markets(client: KalshiClient, series_cfg: dict, raw_dir: Path, since: p
         (raw_dir / "events" / f"{series_ticker}.json").write_text(json.dumps(events))
 
         counts[series_ticker] = len(kept)
-        n_hist = sum(r["source"] == "historical" for r in kept)
-        log(f"{series_ticker}: {len(kept)} settled markets since {since.date()} "
-            f"({n_hist} historical tier, {len(kept) - n_hist} live), {len(events)} events")
+        log(f"{series_ticker}: {n_questions} settled markets since {since.date()}, "
+            f"plus {len(kept) - n_questions} earlier ones kept for context; {len(events)} events")
     return counts
 
 
 def pull_prices(client: KalshiClient, series_cfg: dict, raw_dir: Path, lookback_hours: int = 168,
-                log: Log = print) -> pd.DataFrame:
-    """For each market, the benchmark price at its question time, from hourly candlesticks over the
-    `lookback_hours` before it. One request per market (cached)."""
+                since: pd.Timestamp | None = None, log: Log = print) -> pd.DataFrame:
+    """For each question market (closing on/after `since`), the benchmark price at its question
+    time, from hourly candlesticks over the `lookback_hours` before it. One request per market
+    (cached). Earlier, context-only markets are skipped."""
     rows = []
     for series_ticker, cfg in series_cfg.items():
         path = raw_dir / "markets" / f"{series_ticker}.jsonl"
@@ -275,6 +378,9 @@ def pull_prices(client: KalshiClient, series_cfg: dict, raw_dir: Path, lookback_
             log(f"[skip] {series_ticker}: no markets file; run the `markets` step first")
             continue
         records = _read_jsonl(path)
+        if since is not None:
+            records = [r for r in records
+                       if (ct := parse_time(r["market"].get("close_time"))) is not None and ct >= since]
         log(f"{series_ticker}: fetching prices for {len(records)} markets")
         for i, record in enumerate(records, 1):
             m = record["market"]
@@ -307,16 +413,20 @@ def pull_prices(client: KalshiClient, series_cfg: dict, raw_dir: Path, lookback_
 
 def build_dataset(series_cfg: dict, raw_dir: Path, processed_dir: Path, since: pd.Timestamp,
                   heldout_groups: Iterable[str] = HELDOUT_GROUPS, log: Log = print) -> pd.DataFrame:
-    """Joins markets, events and prices into one row per market and assigns splits."""
+    """Joins markets, events and prices into one row per market, attaches each question's context
+    (earlier results that were public before its question time), and assigns splits."""
     skipped: Counter = Counter()
-    rows = []
+    rows, context_events = [], []
     for series_ticker, cfg in series_cfg.items():
         path = raw_dir / "markets" / f"{series_ticker}.jsonl"
         if not path.exists():
             continue
         events_path = raw_dir / "events" / f"{series_ticker}.json"
         events = json.loads(events_path.read_text()) if events_path.exists() else {}
-        for record in _read_jsonl(path):
+        records = _read_jsonl(path)
+        context_events += collect_context_events(records, events, series_ticker,
+                                                 cfg.get("family", series_ticker))
+        for record in records:
             m = record["market"]
             outcome = outcome_from_result(m.get("result"))
             if outcome is None:
@@ -360,6 +470,8 @@ def build_dataset(series_cfg: dict, raw_dir: Path, processed_dir: Path, since: p
     df, n_dupes = drop_cross_series_duplicates(df)
     if n_dupes:
         skipped["same question under KX and older ticker"] += n_dupes
+    context_n = {s: cfg.get("context_n", DEFAULT_CONTEXT_N) for s, cfg in series_cfg.items()}
+    df = attach_context(df, pd.DataFrame(context_events), context_n)
     df = assign_splits(df, heldout_groups)
     df = df.sort_values(["close_time", "market_ticker"]).reset_index(drop=True)
     df["close_time"] = df["close_time"].map(lambda t: t.isoformat())
@@ -383,6 +495,12 @@ def summarize(df: pd.DataFrame, skipped: Counter | None = None) -> str:
     d["sq_err"] = (d["market_prob"] - d["outcome"]) ** 2          # NaN where there's no price
     d["close_dt"] = to_utc(d["close_time"])
     d["open_hours"] = (d["close_dt"] - to_utc(d["open_time"])).dt.total_seconds() / 3600
+    if "n_context" not in d.columns:
+        d["n_context"], d["context_latest_settled"] = 0, None
+    d["n_context"] = pd.to_numeric(d["n_context"], errors="coerce").fillna(0)
+    d["has_context"] = d["n_context"] > 0
+    latest = to_utc(d["context_latest_settled"])
+    n_leaks = int((latest.notna() & (latest >= to_utc(d["question_time"]))).sum())
 
     by_series = d.groupby("series_ticker").agg(
         markets=("market_ticker", "size"),
@@ -393,6 +511,8 @@ def summarize(df: pd.DataFrame, skipped: Counter | None = None) -> str:
         qt_clamped=("qt_clamped_b", "mean"),
         median_open_hours=("open_hours", "median"),
         market_brier=("sq_err", "mean"),
+        has_context=("has_context", "mean"),
+        median_context=("n_context", "median"),
     ).round(3)
     by_split = d.groupby("split").agg(
         markets=("market_ticker", "size"),
@@ -412,6 +532,9 @@ def summarize(df: pd.DataFrame, skipped: Counter | None = None) -> str:
         f"With a benchmark price: {int(d['has_price'].sum())} ({d['has_price'].mean():.1%})",
         f"Market-price Brier score, all priced markets: {overall_brier}  "
         "(lower is better; always guessing 0.5 scores 0.25)",
+        f"Context: {d['has_context'].mean():.1%} of questions have earlier results. "
+        f"Leakage audit: {n_leaks} questions with a context entry settled at or after question time "
+        f"({'OK' if n_leaks == 0 else 'PROBLEM: investigate before training'})",
         "", "By series:", by_series.to_string(), "", "By split:", by_split.to_string(),
     ]
     if skipped:
@@ -421,6 +544,7 @@ def summarize(df: pd.DataFrame, skipped: Counter | None = None) -> str:
         "- priced well below 1.0 for a series: thin trading; consider a longer horizon or dropping it",
         "- qt_clamped near 1.0: markets open less than horizon_hours before close; lower horizon_hours",
         "- market_brier near 0.25: the market itself has little skill there (hard questions)",
+        "- has_context well below 1.0: early questions with no earlier results; check context_lookback_days",
     ]
     return "\n".join(lines)
 
@@ -446,6 +570,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--since", default=SINCE_DEFAULT, help=f"keep markets closing on/after this date (default {SINCE_DEFAULT})")
     parser.add_argument("--category", action="append", help="category for `discover` (repeatable; \"\" lists all)")
     parser.add_argument("--lookback-hours", type=int, default=168, help="candle window before question time (default 168)")
+    parser.add_argument("--context-lookback-days", type=int, default=400,
+                        help="also keep markets this many days before --since, as context only (default 400)")
     parser.add_argument("--data-dir", type=Path, default=Path(__file__).resolve().parent)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--no-cache", action="store_true", help="ignore and don't write the response cache")
@@ -460,9 +586,9 @@ def main(argv: list[str] | None = None) -> None:
         discover(client, args.category if args.category is not None else DISCOVER_CATEGORIES, raw_dir)
         return
     if args.step in ("markets", "all"):
-        pull_markets(client, series_cfg, raw_dir, since)
+        pull_markets(client, series_cfg, raw_dir, since, args.context_lookback_days)
     if args.step in ("prices", "all"):
-        pull_prices(client, series_cfg, raw_dir, args.lookback_hours)
+        pull_prices(client, series_cfg, raw_dir, args.lookback_hours, since)
     if args.step in ("build", "all"):
         build_dataset(series_cfg, raw_dir, processed_dir, since)
 

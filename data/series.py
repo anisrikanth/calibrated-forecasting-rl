@@ -11,15 +11,18 @@ family:         the underlying series, shared by its KX and older tickers.
 horizon_hours:  question time = close time minus this many hours. The model only gets
                 information from before this time, and the market price at this time is the
                 benchmark. Clamped to at least 1 hour after the market opened.
+context_n:      how many earlier results of the same family to show with each question
+                (6 months of releases; 7 days of temperatures).
 """
 
 # Llama 3.2's knowledge cutoff is December 2023, so only markets that closed after this are used.
 SINCE_DEFAULT = "2024-01-01"
 
 
-def _both_names(family: str, group: str, horizon_hours: float, note: str) -> dict:
+def _both_names(family: str, group: str, horizon_hours: float, note: str, context_n: int = 6) -> dict:
     """The KX ticker and the older ticker for the same series."""
-    cfg = {"group": group, "family": family, "horizon_hours": horizon_hours, "note": note}
+    cfg = {"group": group, "family": family, "horizon_hours": horizon_hours, "note": note,
+           "context_n": context_n}
     return {f"KX{family}": dict(cfg), family: dict(cfg, note=note + " (older ticker)")}
 
 
@@ -34,8 +37,8 @@ SERIES = {
     **_both_names("FED",         "econ", 24, "Fed funds target rate after an FOMC meeting"),
     **_both_names("FEDDECISION", "econ", 24, "FOMC decision: hike, cut or hold"),
     # Held-out category: daily high temperature
-    **_both_names("HIGHNY",      "weather", 18, "NYC daily high temperature"),
-    **_both_names("HIGHCHI",     "weather", 18, "Chicago daily high temperature"),
+    **_both_names("HIGHNY",      "weather", 18, "NYC daily high temperature", context_n=7),
+    **_both_names("HIGHCHI",     "weather", 18, "Chicago daily high temperature", context_n=7),
 }
 
 HELDOUT_GROUPS = ("weather",)
