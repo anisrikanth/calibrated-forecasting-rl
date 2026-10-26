@@ -23,8 +23,8 @@ Training a small open language model with reinforcement learning (GRPO) to give 
 ## Status
 
 - [x] Phase 0: setup and GRPO smoke test on Kaggle (20 steps, plus checkpoint resume)
-- [ ] Phase 1: Kalshi data pipeline, leakage controls, date-based splits
-- [ ] Phase 2: forecasting environment, grader, baselines
+- [x] Phase 1: Kalshi data pipeline (14,662 markets, 10 series), context snapshots, leakage audit, date-based splits
+- [ ] Phase 2: forecasting environment (done), baselines and leak probe (notebook ready)
 - [ ] Phase 3: GRPO training and reward-hacking log
 - [ ] Phase 4: generalization tests and ablations
 - [ ] Phase 5: write-up

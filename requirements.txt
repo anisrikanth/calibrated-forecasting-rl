@@ -2,7 +2,8 @@
 requests>=2.31
 pandas>=2.0
 
-# Tests
+# Tests and notebook building
 pytest>=7.0
+nbformat>=5.0
 
 # Training dependencies (Unsloth, vLLM, TRL) are installed inside the Kaggle notebooks.
