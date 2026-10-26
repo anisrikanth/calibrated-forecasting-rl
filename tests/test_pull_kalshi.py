@@ -101,6 +101,14 @@ def test_price_with_no_usable_candles():
     assert p["market_prob"] is None and p["market_prob_source"] == "no_candles"
 
 
+def test_to_utc_handles_mixed_fractional_seconds():
+    from data.pull_kalshi import to_utc
+    s = pd.Series(["2025-11-03T06:24:28+00:00", "2025-11-03T06:24:28.932309+00:00", "2024-01-01T00:00:00Z"])
+    out = to_utc(s)
+    assert out.notna().all() and str(out.dt.tz) == "UTC"
+    assert out[1].microsecond == 932309
+
+
 def test_question_text_prefers_rules():
     m = {"rules_primary": "  If payrolls exceed 125,000, resolves Yes. ", "yes_sub_title": "Above 125k"}
     assert build_question_text(m, {"title": "Jobs"}) == "If payrolls exceed 125,000, resolves Yes."
@@ -125,6 +133,40 @@ def test_splits_keep_ladders_together_and_are_chronological():
     assert (counts["train"], counts["val"], counts["test"]) == (14, 3, 3)
 
 
+def test_same_day_events_never_straddle_a_split_boundary():
+    rows = []
+    for i in range(10):  # 10 events on 10 different days -> 7 train, 2 val, 1 test
+        rows.append({"event_ticker": f"E{i}", "group": "econ",
+                     "close_time": pd.Timestamp("2024-01-10 13:30", tz=UTC) + pd.DateOffset(months=i)})
+    # A second release on the day of the first val event (e.g. core CPI alongside CPI), later that day
+    boundary_day = rows[7]["close_time"]
+    rows.append({"event_ticker": "E7b", "group": "econ", "close_time": boundary_day - pd.Timedelta(hours=1)})
+    rows.append({"event_ticker": "E6b", "group": "econ",
+                 "close_time": rows[6]["close_time"] + pd.Timedelta(hours=2)})  # same day as last train event
+    split = assign_splits(pd.DataFrame(rows)).set_index("event_ticker")["split"]
+    assert split["E6"] == split["E6b"] == "train"
+    assert split["E7"] == split["E7b"]
+
+
+def test_cross_series_duplicates_keep_the_kx_copy():
+    from data.pull_kalshi import drop_cross_series_duplicates
+    base = {"family": "FED", "close_time": pd.Timestamp("2024-12-18 19:00", tz=UTC),
+            "strike_type": "greater", "cap_strike": None}
+    df = pd.DataFrame([
+        dict(base, market_ticker="FED-24DEC-T4.50", series_ticker="FED", floor_strike=4.5, yes_sub_title="Above 4.50%"),
+        dict(base, market_ticker="KXFED-24DEC-T4.50", series_ticker="KXFED", floor_strike=4.5, yes_sub_title="Above 4.50%"),
+        dict(base, market_ticker="KXFED-24DEC-T4.25", series_ticker="KXFED", floor_strike=4.25, yes_sub_title="Above 4.25%"),
+        # Different ticker naming, same question: caught by the strike/day/label match
+        dict(base, market_ticker="FED-1218-T4.25", series_ticker="FED", floor_strike=4.25, yes_sub_title="Above 4.25%"),
+        # Same day, different family: kept
+        dict(base, family="CPI", market_ticker="CPI-24DEC-T0.3", series_ticker="CPI", floor_strike=4.5,
+             yes_sub_title="Above 4.50%"),
+    ])
+    out, dropped = drop_cross_series_duplicates(df)
+    assert dropped == 2
+    assert set(out["market_ticker"]) == {"KXFED-24DEC-T4.50", "KXFED-24DEC-T4.25", "CPI-24DEC-T0.3"}
+
+
 # ---- end to end with a fake API ------------------------------------------------------------------
 
 def ts(s):
@@ -135,7 +177,8 @@ def make_market(ticker, event, close, result="yes", open_days=10, strike=100):
     close_t = ts(close)
     return {
         "ticker": ticker, "event_ticker": event, "result": result,
-        "open_time": (close_t - pd.Timedelta(days=open_days)).isoformat(),
+        # Some open times carry fractional seconds, as real Kalshi data does
+        "open_time": (close_t - pd.Timedelta(days=open_days, microseconds=932309 if strike == 200 else 0)).isoformat(),
         "close_time": close_t.isoformat(),
         "settlement_ts": (close_t + pd.Timedelta(hours=1)).isoformat(),
         "rules_primary": f"If the value exceeds {strike}, the market resolves to Yes.",
@@ -164,7 +207,12 @@ class FakeClient:
 
         wx = [make_market(f"WX-24JUL0{d}-B80", f"WX-24JUL0{d}", f"2024-07-0{d} 23:59", "yes", open_days=1)
               for d in range(1, 4)]
+        # Older-name copy of one SER question (same family): should be dropped as a duplicate.
+        legacy = dict(econ_hist[2], ticker="OLD" + econ_hist[2]["ticker"][3:],
+                      event_ticker="OLD" + econ_hist[2]["event_ticker"][3:])
         self.data = {
+            "OLD": {"events": {legacy["event_ticker"]: {"event_ticker": legacy["event_ticker"], "title": "Old name"}},
+                    "hist": [legacy], "live": []},
             "SER": {"events": events, "hist": econ_hist, "live": econ_live},
             "WX": {"events": {m["event_ticker"]: {"event_ticker": m["event_ticker"], "title": "High temp"} for m in wx},
                    "hist": [], "live": wx},
@@ -197,7 +245,9 @@ class FakeClient:
         return [candle(end_ts, "0.80", "0.84")]               # priced at 0.82
 
 
-CFG = {"SER": {"group": "econ", "horizon_hours": 24}, "WX": {"group": "weather", "horizon_hours": 18},
+CFG = {"SER": {"group": "econ", "family": "SER", "horizon_hours": 24},
+       "OLD": {"group": "econ", "family": "SER", "horizon_hours": 24},
+       "WX": {"group": "weather", "horizon_hours": 18},
        "MISSING": {"group": "econ", "horizon_hours": 24}}
 
 
@@ -207,19 +257,20 @@ def test_pipeline_end_to_end(tmp_path):
     logs = []
 
     counts = pull_markets(client, CFG, raw, SINCE, log=logs.append)
-    assert counts == {"SER": 21, "WX": 3}           # 20 + 1 scalar; the 2023 market is filtered
+    assert counts == {"SER": 21, "OLD": 1, "WX": 3}  # SER: 20 + 1 scalar; the 2023 market is filtered
     assert any("[skip] MISSING" in line for line in logs)
     records = [json.loads(l) for l in (raw / "markets" / "SER.jsonl").read_text().splitlines()]
     dup = next(r for r in records if r["market"]["ticker"] == "SER-24M00-T100")
     assert dup["source"] == "live" and dup["market"]["rules_primary"] == "LIVE COPY"
 
     prices = pull_prices(client, CFG, raw, log=logs.append)
-    assert len(prices) == 24
+    assert len(prices) == 25
     hist_calls = {t for t, h in client.candle_calls if h}
     assert "SER-24M01-T100" in hist_calls and "SER-24M00-T100" not in hist_calls
 
     df = build_dataset(CFG, raw, processed, SINCE, log=logs.append)
-    assert len(df) == 23                             # scalar market dropped
+    assert len(df) == 23                             # scalar market and the older-name duplicate dropped
+    assert df["market_ticker"].str.endswith("-24M01-T100").sum() == 1   # one copy of the duplicated question
     assert set(df["split"]) == {"train", "val", "test", "heldout"}
     assert (df.groupby("event_ticker")["split"].nunique() == 1).all()
     assert df.loc[df.series_ticker == "WX", "split"].eq("heldout").all()
@@ -234,7 +285,8 @@ def test_pipeline_end_to_end(tmp_path):
     assert wx["qt_clamped"].astype(str).eq("False").all()   # open 24h, horizon 18h: no clamp
 
     summary = (processed / "summary.txt").read_text()
-    assert "Markets: 23" in summary and "Skipped: no yes/no result: 1" in summary
+    assert "Markets: 23" in summary and "no yes/no result: 1" in summary
+    assert "same question under KX and older ticker: 1" in summary
     saved = pd.read_csv(processed / "markets.csv")
     assert len(saved) == 23 and list(saved["close_time"]) == sorted(saved["close_time"])
 

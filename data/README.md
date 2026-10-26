@@ -5,10 +5,10 @@ Pulls resolved Kalshi markets and turns them into a leak-controlled, date-split 
 ## Run it
 
 ```bash
-# 1. See which series tickers exist, then edit data/series.py to match
+# 1. (Optional) list every series in the Economics and Climate and Weather categories
 python -m data.pull_kalshi discover
 
-# 2. Quick first run on the one confirmed series
+# 2. Quick first run on one series
 python -m data.pull_kalshi all --series KXPAYROLLS
 
 # 3. Full run
@@ -33,7 +33,8 @@ Rough timing at the default ~5 requests/second: economic series take a few minut
 - **Leakage cutoff:** only markets that closed on or after 2024-01-01, because Llama 3.2's knowledge cutoff is December 2023 (`SINCE_DEFAULT` in `series.py`).
 - **Question time:** close time minus `horizon_hours` (24 for economic series, 18 for weather), but never earlier than 1 hour after the market opened. Check `qt_clamped` and `median_open_hours` in the summary and adjust per series.
 - **Benchmark price:** from the last hourly candle ending at or before the question time. The bid/ask midpoint if the spread is at most 0.20, otherwise the last traded price. Never shown to the model.
-- **Splits:** weather series all go to `heldout`. Economic events (ladders) are sorted by their last close time: oldest 70% train, next 15% val, newest 15% test. Every threshold of the same event stays in the same split.
+- **Series and duplicates:** every series is pulled under both its KX ticker and its older ticker (e.g. `KXCPI` and `CPI`), which share a `family`. If the same question appears under both, `build` keeps the KX copy.
+- **Splits:** weather series all go to `heldout`. Economic events (ladders) are sorted by their last close time: oldest 70% train, next 15% val, newest 15% test. Every threshold of the same event stays in the same split, and events closing on the same day (e.g. CPI and core CPI) always share a split.
 - **Outcomes:** `result` of "yes" → 1, "no" → 0. Scalar or voided markets are dropped (counted under "Skipped" in the summary).
 
 ## `processed/markets.csv` columns
@@ -41,6 +42,7 @@ Rough timing at the default ~5 requests/second: economic series take a few minut
 | Column | Meaning |
 | --- | --- |
 | `market_ticker`, `event_ticker`, `series_ticker` | Kalshi identifiers; `event_ticker` groups a ladder of thresholds |
+| `family` | The underlying series, shared by its KX and older tickers (e.g. `CPI`) |
 | `group` | `econ` or `weather` |
 | `question_text` | The market's resolution rule (`rules_primary`), or titles if missing |
 | `event_title`, `yes_sub_title` | Human-readable titles |

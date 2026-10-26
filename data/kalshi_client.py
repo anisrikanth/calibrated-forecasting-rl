@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Iterator
@@ -59,7 +60,10 @@ class KalshiClient:
         params = {k: v for k, v in (params or {}).items() if v is not None and v != ""}
         cache_file = self._cache_path(path, params) if use_cache else None
         if cache_file and cache_file.exists():
-            return json.loads(cache_file.read_text())
+            try:
+                return json.loads(cache_file.read_text())
+            except ValueError:            # half-written file from an interrupted run: refetch it
+                cache_file.unlink()
 
         last_problem = ""
         for attempt in range(self.max_retries):
@@ -73,7 +77,11 @@ class KalshiClient:
             if resp.status_code == 200:
                 data = resp.json()
                 if cache_file:
-                    cache_file.write_text(json.dumps(data))
+                    # Write to a temp file, then rename: a rename is all-or-nothing, so Ctrl+C
+                    # can't leave a half-written cache file behind.
+                    tmp = cache_file.with_suffix(".tmp")
+                    tmp.write_text(json.dumps(data))
+                    os.replace(tmp, cache_file)
                 return data
             if resp.status_code == 404:
                 raise NotFound(f"404 for {path} {params}")

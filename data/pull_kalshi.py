@@ -49,6 +49,15 @@ def parse_time(value: Any) -> pd.Timestamp | None:
     return None if pd.isna(ts) else ts
 
 
+def to_utc(values: pd.Series) -> pd.Series:
+    """Column of timestamps -> UTC datetimes. Kalshi mixes whole and fractional seconds
+    ("...T06:24:28+00:00" and "...T06:24:28.932309+00:00"), so strings are parsed as general
+    ISO-8601 instead of guessing one format from the first rows."""
+    if pd.api.types.is_datetime64_any_dtype(values):
+        return pd.to_datetime(values, utc=True)
+    return pd.to_datetime(values, utc=True, format="ISO8601")
+
+
 def to_prob(value: Any, key: str = "") -> float | None:
     """Price -> probability in dollars (0 to 1). Current fields end in `_dollars` and are fixed-point
     strings like "0.5600"; older fields may be whole cents (56), which are divided by 100."""
@@ -132,7 +141,9 @@ def assign_splits(df: pd.DataFrame, heldout_groups: Iterable[str] = HELDOUT_GROU
                   train_frac: float = 0.70, val_frac: float = 0.15) -> pd.DataFrame:
     """Date-based split by event. Every threshold of an event (a ladder) lands in the same split.
     Held-out groups (weather) all go to "heldout". Other events are ordered by their last close
-    time: the oldest `train_frac` -> train, the next `val_frac` -> val, the newest -> test."""
+    time: the oldest `train_frac` -> train, the next `val_frac` -> val, the newest -> test.
+    Events closing on the same UTC day always share a split, so one release day (e.g. CPI and
+    core CPI) never straddles two splits."""
     df = df.copy()
     held = df["group"].isin(list(heldout_groups))
     df["split"] = None
@@ -146,8 +157,34 @@ def assign_splits(df: pd.DataFrame, heldout_groups: Iterable[str] = HELDOUT_GROU
         n_val = int(round(n * val_frac))
         labels = ["train"] * n_train + ["val"] * n_val + ["test"] * (n - n_train - n_val)
         split_of_event = dict(zip(event_close.index, labels))
+        # Same-day events take the label of that day's first event (the earlier split).
+        day = to_utc(event_close).dt.floor("D")
+        label_of_day: dict = {}
+        for event, d in day.items():
+            label_of_day.setdefault(d, split_of_event[event])
+        split_of_event = {event: label_of_day[d] for event, d in day.items()}
         df.loc[~held, "split"] = df.loc[~held, "event_ticker"].map(split_of_event)
     return df
+
+
+def drop_cross_series_duplicates(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """The same question can be listed under a KX ticker and its older ticker (same family).
+    Keeps one copy, preferring the KX one. Two questions match if their tickers are the same
+    after the series prefix (KXFED-24DEC-T4.50 vs FED-24DEC-T4.50), or if they close on the same
+    day with the same strike and outcome label."""
+    if "family" not in df.columns or df.empty:
+        return df, 0
+    d = df.copy()
+    d["_kx_first"] = ~d["series_ticker"].str.startswith("KX")
+    d["_suffix"] = [t[len(s):] if t.startswith(s) else t
+                    for t, s in zip(d["market_ticker"], d["series_ticker"])]
+    d["_close_day"] = to_utc(d["close_time"]).dt.floor("D")
+    d = d.sort_values(["_kx_first", "market_ticker"], kind="stable")
+    before = len(d)
+    d = d.drop_duplicates(subset=["family", "_suffix"])
+    d = d.drop_duplicates(subset=["family", "_close_day", "strike_type", "floor_strike",
+                                  "cap_strike", "yes_sub_title"])
+    return d.drop(columns=["_kx_first", "_suffix", "_close_day"]), before - len(d)
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -290,6 +327,7 @@ def build_dataset(series_cfg: dict, raw_dir: Path, processed_dir: Path, since: p
                 "market_ticker": m["ticker"],
                 "event_ticker": m.get("event_ticker"),
                 "series_ticker": series_ticker,
+                "family": cfg.get("family", series_ticker),
                 "group": cfg["group"],
                 "question_text": build_question_text(m, event),
                 "event_title": event.get("title") or m.get("title"),
@@ -317,8 +355,11 @@ def build_dataset(series_cfg: dict, raw_dir: Path, processed_dir: Path, since: p
         for col in ["question_time", "qt_clamped", *PRICE_FIELDS]:
             df[col] = None
 
-    df["close_time"] = pd.to_datetime(df["close_time"], utc=True)
+    df["close_time"] = to_utc(df["close_time"])
     df = df.loc[df["close_time"] >= since].copy()
+    df, n_dupes = drop_cross_series_duplicates(df)
+    if n_dupes:
+        skipped["same question under KX and older ticker"] += n_dupes
     df = assign_splits(df, heldout_groups)
     df = df.sort_values(["close_time", "market_ticker"]).reset_index(drop=True)
     df["close_time"] = df["close_time"].map(lambda t: t.isoformat())
@@ -340,8 +381,8 @@ def summarize(df: pd.DataFrame, skipped: Counter | None = None) -> str:
     d["has_price"] = d["market_prob"].notna()
     d["qt_clamped_b"] = d["qt_clamped"].map(lambda v: v is True or str(v).lower() == "true")
     d["sq_err"] = (d["market_prob"] - d["outcome"]) ** 2          # NaN where there's no price
-    d["close_dt"] = pd.to_datetime(d["close_time"], utc=True)
-    d["open_hours"] = (d["close_dt"] - pd.to_datetime(d["open_time"], utc=True)).dt.total_seconds() / 3600
+    d["close_dt"] = to_utc(d["close_time"])
+    d["open_hours"] = (d["close_dt"] - to_utc(d["open_time"])).dt.total_seconds() / 3600
 
     by_series = d.groupby("series_ticker").agg(
         markets=("market_ticker", "size"),

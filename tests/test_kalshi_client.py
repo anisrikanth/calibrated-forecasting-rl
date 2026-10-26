@@ -82,6 +82,15 @@ def test_cache_serves_repeat_requests(tmp_path):
     assert len(session.calls) == 1
 
 
+def test_broken_cache_file_is_refetched(tmp_path):
+    client, session = make_client([FakeResponse(200, {"v": 2})], cache_dir=tmp_path)
+    client._cache_path("/a", {}).write_text('{"v": ')       # truncated by an interrupted run
+    assert client.get("/a") == {"v": 2}
+    assert len(session.calls) == 1
+    assert client.get("/a") == {"v": 2}                       # now served from the repaired cache
+    assert not list(tmp_path.glob("*.tmp"))
+
+
 def test_historical_cutoff_is_never_cached(tmp_path):
     client, session = make_client([FakeResponse(200, {"market_settled_ts": "a"}),
                                    FakeResponse(200, {"market_settled_ts": "b"})], cache_dir=tmp_path)
