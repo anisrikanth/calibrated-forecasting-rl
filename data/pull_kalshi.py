@@ -117,7 +117,7 @@ def price_at_question_time(candles: Iterable[dict], qt_unix: int, max_spread: fl
             prob, source = None, "wide_quote_only"
         return {"yes_bid": bid, "yes_ask": ask, "spread": spread, "last_trade": last,
                 "market_prob": prob, "market_prob_source": source, "price_ts": c["end_period_ts"]}
-    return {k: None for k in PRICE_FIELDS} | {"market_prob_source": "no_candles"}
+    return {**{k: None for k in PRICE_FIELDS}, "market_prob_source": "no_candles"}
 
 
 def build_question_text(market: dict, event: dict) -> str:
@@ -245,7 +245,7 @@ def pull_prices(client: KalshiClient, series_cfg: dict, raw_dir: Path, lookback_
                                         cfg["horizon_hours"])
             row = {"market_ticker": m["ticker"], "question_time": _iso(qt), "qt_clamped": clamped}
             if qt is None:
-                rows.append(row | {k: None for k in PRICE_FIELDS} | {"market_prob_source": "open_under_1h"})
+                rows.append({**row, **{k: None for k in PRICE_FIELDS}, "market_prob_source": "open_under_1h"})
                 continue
             qt_unix = int(qt.timestamp())
             start = qt_unix - lookback_hours * 3600
@@ -257,7 +257,7 @@ def pull_prices(client: KalshiClient, series_cfg: dict, raw_dir: Path, lookback_
                     candles = client.candlesticks(series_ticker, m["ticker"], start, qt_unix, 60, not historical)
                 except NotFound:
                     candles = []
-            rows.append(row | price_at_question_time(candles, qt_unix))
+            rows.append({**row, **price_at_question_time(candles, qt_unix)})
             if i % 100 == 0 or i == len(records):
                 log(f"  {i}/{len(records)}")
 
