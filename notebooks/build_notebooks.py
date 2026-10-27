@@ -223,7 +223,9 @@ consistency = pd.DataFrame(consistency)
 consistency'''),
         md("""## 10. Leak probe
 
-Without context, the model only has the question and the date. Beating the base rate that way is fine: the question text alone carries information ("payrolls above 0" is likely yes). What would be suspicious is scoring **about as well as the live market**, which trades on real-time information the model doesn't have. That would suggest the model memorized these outcomes. Llama 3.2's training data ends in December 2023 and every question here is from 2026, so we expect **no** flags. A series is flagged if its no-context Brier score is within 0.02 of the market's."""),
+Without context, the model only has the question and the date. Beating the base rate that way is fine: the question text alone carries information ("payrolls above 0" is likely yes). What would be suspicious is capturing **most of the live market's advantage**, since the market trades on real-time information the model doesn't have.
+
+**Share of market edge** = (base-rate Brier − no-context Brier) ÷ (base-rate Brier − market Brier). 0 means no better than the base rate; 1 means as good as the market. A series is flagged if the share is above 0.5. Series where the market barely beats the base rate (by less than 0.02) can't be judged and show as blank. Llama 3.2's training data ends in December 2023 and every question here is from 2026, so we expect **no** flags."""),
         code('''val_scored = scored[scored["eval_set"] == "val_econ"]
 leak = val_scored.groupby("series_ticker").apply(lambda g: pd.Series({
     "n": len(g),
@@ -232,7 +234,9 @@ leak = val_scored.groupby("series_ticker").apply(lambda g: pd.Series({
     "noctx_brier": round(M.brier(g["model_noctx_mean4"], g["outcome"]), 4),
 }))
 leak["n"] = leak["n"].astype(int)
-leak["flag"] = np.where(leak["noctx_brier"] <= leak["market_brier"] + 0.02, "CHECK", "ok")
+market_edge = leak["base_rate_brier"] - leak["market_brier"]
+leak["share_of_market_edge"] = ((leak["base_rate_brier"] - leak["noctx_brier"]) / market_edge).where(market_edge >= 0.02).round(2)
+leak["flag"] = np.where(leak["share_of_market_edge"] > 0.5, "CHECK", "ok")
 leak'''),
         md("## 11. Reliability diagrams"),
         code('''import matplotlib.pyplot as plt
