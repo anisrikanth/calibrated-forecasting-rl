@@ -280,7 +280,268 @@ print("=" * 25, "COPY TO HERE", "=" * 27)'''),
     return nb
 
 
+CLONE_REPO = '''import subprocess, sys
+
+REPO_DIR = "/tmp/calibrated-forecasting-rl"
+if not os.path.exists(REPO_DIR):
+    result = subprocess.run(["git", "clone", "--depth", "1", REPO_URL, REPO_DIR], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError("Couldn't clone the repo (is it public?):\\n" + result.stderr)
+sys.path.insert(0, REPO_DIR)
+COMMIT = subprocess.run(["git", "-C", REPO_DIR, "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
+print("Using repo commit", COMMIT)'''
+
+
+def training() -> nbf.NotebookNode:
+    cells = [
+        md("""# Phase 3: GRPO training on Kalshi forecasting questions
+
+Trains a LoRA adapter on Llama 3.2 with GRPO. For each training question the model writes several answers. Each answer is scored with the **Brier reward** (1 minus the squared gap between its stated probability and what happened) plus a small **format reward**, and the model is nudged toward its better answers. Then it **evaluates the trained model and the untrained model in the same session** on the validation economic questions and held-out weather days, scored the same way as the Phase 2 baselines.
+
+**Before Run All**, in the right sidebar: **Accelerator → GPU T4 x2**, **Internet → On**, **Add Input → Your Work → Datasets →** your `markets.csv` dataset.
+
+**Recommended order:**
+1. **Shakedown:** set `MAX_STEPS = 30`, then Save & Run All (about 40 minutes). This checks that training, saving and evaluation all work.
+2. **Full run:** set `MAX_STEPS = -1` (one pass over all 1,391 training questions), then Save & Run All. On 3B, expect a few hours; the first log lines print an estimate.
+
+**While it runs**, open the version's **Logs** to see lines like `format_ok 0.97 | mean_p 0.48 | sd_p 0.21 | gap +0.05 | brier 0.24` every 10 reward calls. The number to watch is **gap**: the average probability on questions that resolved yes minus on those that resolved no. Brier falling while gap stays near 0 means the model is hedging, not learning.
+
+At the end, copy the block between **COPY FROM HERE** and **COPY TO HERE** back to Claude."""),
+        md("## 1. Settings"),
+        code('''MODEL_NAME = "unsloth/Llama-3.2-3B-Instruct"
+RUN_NAME = "3b_brier_ctx_v1"     # names the saved adapter and output files
+REWARD = "brier"                 # "brier" (main) or "log" (ablation)
+INCLUDE_CONTEXT = True           # show the series' recent results in the prompt
+
+MAX_STEPS = 30                   # 30 = shakedown; -1 = one full pass over the training questions
+LEARNING_RATE = 5e-6
+LORA_RANK = 32
+NUM_GENERATIONS = 4              # answers per question, compared against each other
+PER_DEVICE_BATCH = 4             # answers per forward pass (lower to 2 and raise GRAD_ACCUM to 8 if out of memory)
+GRAD_ACCUM = 4                   # 4 x 4 = 16 answers per step = 4 questions per step
+MAX_COMPLETION = 256
+SAVE_STEPS = 25                  # checkpoint every 25 steps (Kaggle sessions end after 12 hours)
+RESUME_FROM = None               # "auto" = continue from a previous version added as an input
+
+EVAL_BASE = True                 # also score the untrained model now, for a paired comparison
+EVAL_SAMPLES = 4
+EVAL_TEMPERATURE = 0.7
+WEATHER_EVENTS = 60
+SEED = 3407
+
+REPO_URL = "https://github.com/anisrikanth/calibrated-forecasting-rl.git"
+OUT_DIR = "/kaggle/working"
+OUTPUT_DIR = f"{OUT_DIR}/outputs_{RUN_NAME}"
+LORA_DIR = f"{OUT_DIR}/lora_{RUN_NAME}"'''),
+        md("## 2. Check the GPU"),
+        code(GPU_CHECK),
+        md("## 3. Install Unsloth, vLLM and TRL (5–10 minutes)"),
+        code(INSTALL),
+        md("## 4. Get the project code (env/ is tested in the repo)"),
+        code(CLONE_REPO + '''
+from env.evaluation import (load_markets, pick_eval_sets, render_prompt, collect_answers, add_forecast_columns,
+                            score_table, by_series_table, consistency_table)
+from env.training import build_train_records, MonitoredScoreReward
+from env.rewards import trl_format_reward
+from env import metrics as M'''),
+        md("## 5. Load the data"),
+        code('''import glob
+import numpy as np
+import pandas as pd
+
+paths = glob.glob("/kaggle/input/**/markets.csv", recursive=True)
+assert paths, "No markets.csv found. Add your dataset: Add Input > Your Work > Datasets."
+df = load_markets(paths[0])
+eval_df = pick_eval_sets(df, weather_events=WEATHER_EVENTS, seed=SEED)
+print(df["split"].value_counts().to_dict())
+print(eval_df.groupby("eval_set").size().to_dict())'''),
+        md("## 6. Load the model and add LoRA"),
+        code('''from unsloth import FastLanguageModel
+import torch
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name = MODEL_NAME,
+    max_seq_length = 1536,
+    load_in_4bit = False,            # 16-bit LoRA, as in the Phase 0 smoke test
+    fast_inference = True,           # vLLM samples the answers during training
+    max_lora_rank = LORA_RANK,
+    gpu_memory_utilization = 0.85,   # lower to 0.7 if out of memory
+)
+model = FastLanguageModel.get_peft_model(
+    model,
+    r = LORA_RANK,
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    lora_alpha = LORA_RANK,
+    use_gradient_checkpointing = "unsloth",
+    random_state = SEED,
+)'''),
+        md("""## 7. Training data
+
+Training questions only (econ, 2024–2025). Each prompt is rendered exactly as in evaluation, including the question's own date in Llama's header."""),
+        code('''from datasets import Dataset
+
+records = build_train_records(df, tokenizer, include_context=INCLUDE_CONTEXT, seed=SEED)
+train_ds = Dataset.from_list(records)
+prompt_lengths = [len(tokenizer(r["prompt"], add_special_tokens=False)["input_ids"]) for r in records]
+max_prompt_length = max(prompt_lengths) + 8
+print(f"{len(records)} training questions | prompt tokens: median {int(np.median(prompt_lengths))}, max {max(prompt_lengths)}")
+print(f"Yes-rate: {np.mean([r['outcome'] for r in records]):.3f}")
+print(records[0]["prompt"][-600:])'''),
+        md("""## 8. Train
+
+Two rewards are added: **format** (+0.5 for a readable `Probability: 0.XX`, −1.0 otherwise) and **score** (Brier or log). The score reward also records every stated probability and prints recent stats every 10 calls."""),
+        code('''import glob as _glob, os, shutil, time
+from trl import GRPOConfig, GRPOTrainer
+
+monitor = MonitoredScoreReward(REWARD, window=256, print_every=10)
+
+args = GRPOConfig(
+    learning_rate = LEARNING_RATE,
+    weight_decay = 0.001,
+    warmup_ratio = 0.1,
+    lr_scheduler_type = "cosine",
+    optim = "adamw_8bit",
+    logging_steps = 1,
+    per_device_train_batch_size = PER_DEVICE_BATCH,
+    gradient_accumulation_steps = GRAD_ACCUM,
+    num_generations = NUM_GENERATIONS,
+    max_prompt_length = max_prompt_length,
+    max_completion_length = MAX_COMPLETION,
+    num_train_epochs = 1,
+    max_steps = MAX_STEPS,
+    save_steps = SAVE_STEPS,
+    max_grad_norm = 1.0,
+    report_to = "none",
+    output_dir = OUTPUT_DIR,
+    seed = SEED,
+)
+
+resume = False
+if RESUME_FROM == "auto":
+    found = _glob.glob("/kaggle/input/**/checkpoint-*", recursive=True)
+    assert found, "No checkpoints in /kaggle/input: add the previous version as an input."
+    RESUME_FROM = os.path.dirname(max(found, key=lambda p: int(p.rsplit("-", 1)[-1])))
+if RESUME_FROM:
+    shutil.copytree(RESUME_FROM, OUTPUT_DIR, dirs_exist_ok=True)
+    print("Resuming from", RESUME_FROM)
+    resume = True
+
+trainer = GRPOTrainer(
+    model = model,
+    processing_class = tokenizer,
+    reward_funcs = [trl_format_reward, monitor],
+    args = args,
+    train_dataset = train_ds,
+)
+start = time.time()
+train_output = trainer.train(resume_from_checkpoint = resume)
+TRAIN_MINUTES = (time.time() - start) / 60
+print(f"Training took {TRAIN_MINUTES:.1f} min for {trainer.state.global_step} steps")'''),
+        md("Training log (the live table doesn't appear in saved-version logs, so here it is as text):"),
+        code('''log = pd.DataFrame([h for h in trainer.state.log_history if "reward" in h])
+cols = [c for c in log.columns if c in ("step", "reward", "reward_std", "kl", "completions/mean_length",
+                                        "completion_length", "rewards/trl_format_reward/mean",
+                                        f"rewards/{monitor.__name__}/mean")]
+step_every = max(1, len(log) // 25)
+print(log[cols].iloc[::step_every].round(4).to_string(index=False))
+monitor.history().to_csv(f"{OUT_DIR}/train_answers_{RUN_NAME}.csv", index=False)
+log.to_csv(f"{OUT_DIR}/train_log_{RUN_NAME}.csv", index=False)
+print("\\nFirst vs last training answers (512 each, or half the run if shorter):")
+print(monitor.first_last().to_string())'''),
+        md("## 9. Save the adapter"),
+        code('''from safetensors import safe_open
+
+model.save_lora(LORA_DIR)
+with safe_open(f"{LORA_DIR}/adapter_model.safetensors", framework="pt") as f:
+    nonzero = sum(int((f.get_tensor(k) != 0).any()) for k in f.keys())
+print(f"Saved LoRA to {LORA_DIR} ({nonzero} non-zero tensors)")'''),
+        md("""## 10. Evaluate: untrained vs trained
+
+Same questions, prompts, sampling and scoring as the Phase 2 baselines (4 answers at temperature 0.7; mean4 = their average; unreadable = 0.5)."""),
+        code('''from vllm import SamplingParams
+
+eval_rows = eval_df.to_dict("records")
+eval_prompts = [render_prompt(tokenizer, r, INCLUDE_CONTEXT) for r in eval_rows]
+params = SamplingParams(n=EVAL_SAMPLES, temperature=EVAL_TEMPERATURE, top_p=0.95, max_tokens=320, seed=SEED)
+
+def run_eval(lora_request, name):
+    t0 = time.time()
+    outs = model.fast_generate(eval_prompts, sampling_params=params, lora_request=lora_request)
+    ans = collect_answers(eval_rows, outs, name)
+    print(f"{name}: {len(ans)} answers in {(time.time() - t0) / 60:.1f} min | readable {ans['prob'].notna().mean():.3f} "
+          f"| median tokens {ans['n_tokens'].median():.0f}")
+    return ans
+
+answers = [run_eval(model.load_lora(LORA_DIR), "trained")]
+if EVAL_BASE:
+    answers.append(run_eval(None, "base"))
+answers = pd.concat(answers, ignore_index=True)
+answers.to_csv(f"{OUT_DIR}/eval_answers_{RUN_NAME}.csv", index=False)
+
+for name in answers["condition"].unique():
+    eval_df = add_forecast_columns(eval_df, answers, name, name)
+model_cols = [c for c in ("base_single", "base_mean4", "trained_single", "trained_mean4") if c in eval_df.columns]
+methods = ["market", "base_rate", "always_0.5"] + model_cols
+results = score_table(eval_df, methods)
+series = by_series_table(eval_df, ["market", "base_rate"] + [c for c in model_cols if c.endswith("mean4")])
+consistency = consistency_table(eval_df, ["market"] + [c for c in model_cols if c.endswith("mean4")])
+results.to_csv(f"{OUT_DIR}/eval_metrics_{RUN_NAME}.csv", index=False)
+results[["eval_set", "method", "n", "brier", "log_loss", "ece", "reliability", "resolution"]]'''),
+        code('''for name in answers["condition"].unique():
+    ex = answers[(answers["condition"] == name) & (answers["sample"] == 0)].sample(1, random_state=SEED).iloc[0]
+    q = eval_df.set_index("market_ticker").loc[ex["market_ticker"]]
+    print(f"===== {name} | {ex['market_ticker']} | outcome {q['outcome']} | market {q['market_prob']}")
+    print(ex["text"][:1200], "\\n")'''),
+        md("## 11. Reliability diagrams"),
+        code('''import matplotlib.pyplot as plt
+
+scored = eval_df[eval_df["market_prob"].notna()]
+fig, axes = plt.subplots(1, 2, figsize=(11, 5), sharey=True)
+for ax, (eval_set, g) in zip(axes, scored.groupby("eval_set")):
+    ax.plot([0, 1], [0, 1], color="0.7", lw=1, ls="--", label="perfect calibration")
+    for m in ["market"] + [c for c in model_cols if c.endswith("mean4")]:
+        t = M.reliability_table(g[m], g["outcome"])
+        ax.plot(t["mean_forecast"], t["frac_yes"], marker="o", label=m)
+    ax.set_title(f"{eval_set} ({len(g)} questions)")
+    ax.set_xlabel("Forecast probability (bin average)")
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+axes[0].set_ylabel("Share that resolved yes")
+axes[0].legend(loc="upper left", fontsize=9)
+fig.suptitle(f"{RUN_NAME}: untrained vs trained vs market")
+fig.tight_layout()
+fig.savefig(f"{OUT_DIR}/reliability_{RUN_NAME}.png", dpi=150)
+plt.show()'''),
+        md("## 12. Summary to paste back"),
+        code('''print("=" * 25, "COPY FROM HERE", "=" * 25)
+print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | reward {REWARD} | context {INCLUDE_CONTEXT}")
+print(f"Steps {trainer.state.global_step} | lr {LEARNING_RATE} | lora r {LORA_RANK} | {NUM_GENERATIONS} answers/question | "
+      f"{PER_DEVICE_BATCH * GRAD_ACCUM // NUM_GENERATIONS} questions/step | {TRAIN_MINUTES:.0f} min training")
+print()
+print("Training answers, first vs last (512 each, or half the run):")
+print(monitor.first_last().to_string())
+print()
+print(log[cols].iloc[::max(1, len(log) // 10)].round(4).to_string(index=False))
+print()
+for name in answers["condition"].unique():
+    a = answers[answers["condition"] == name]
+    print(f"Eval {name}: readable {a['prob'].notna().mean():.3f} | median tokens {a['n_tokens'].median():.0f}")
+print(results[["eval_set", "method", "n", "brier", "log_loss", "ece", "resolution"]].to_string(index=False))
+print()
+print(series.to_string())
+print()
+print(consistency.to_string(index=False))
+print("=" * 25, "COPY TO HERE", "=" * 27)'''),
+    ]
+    nb = nbf.v4.new_notebook()
+    nb.cells = cells
+    nb.metadata = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+                   "language_info": {"name": "python"}}
+    nbf.validate(nb)
+    return nb
+
+
 if __name__ == "__main__":
-    out = HERE / "phase2_baselines.ipynb"
-    nbf.write(baselines(), out)
-    print("wrote", out)
+    for name, build in (("phase2_baselines.ipynb", baselines), ("phase3_grpo_train.ipynb", training)):
+        out = HERE / name
+        nbf.write(build(), out)
+        print("wrote", out)
