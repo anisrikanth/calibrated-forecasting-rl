@@ -20,15 +20,23 @@ One entry per issue: what happened, how it was spotted, the fix, and the before/
 ## 3. Overconfidence collapse with more training
 
 - **Found:** RL run 2 (3B, Brier reward, 2 passes, learning rate 2e-5), Oct 27, 2026.
-- **What happened:** by the end of training the model answered almost only near 0 or near 1: across the last 512 training answers the spread of stated probabilities was 0.48 and none fell between 0.45 and 0.55 (11% did at the start). On new econ questions the Brier score got worse than the untrained model (0.320 vs 0.272) and calibration error rose from 0.12 to 0.30. Payrolls, the noisiest series, scored 0.55. Late in training many groups had a reward spread near 0: all 4 answers gave the same extreme number, so there was nothing left to compare.
+- **What happened:** the collapse started inside the first pass. The share of answers at or below 0.05 or at or above 0.95 passed 50% around step 300. The average forecast then swung to 0.04 at step 384 (almost every answer "no") before settling into a two-sided 0/1 pattern: 94% near-certain at the end, none between 0.45 and 0.55. On new econ questions, 72% of forecasts were near-certain, calibration error rose from 0.12 to 0.30, and the Brier score got worse than the untrained model's (0.320 vs 0.272; payrolls 0.55). Underneath, the ordering did improve (AUC 0.52 to 0.69, interval +0.10 to +0.25), and after recalibration it beats the untrained model (0.238 vs 0.259). Late in training many groups had a reward spread near 0: all 4 answers gave the same extreme number, so there was nothing left to compare.
 - **Why it likely happens:** GRPO divides each answer's advantage by the spread of rewards in its group. With a proper-scoring reward this favors confident answers and feeds on itself ([Bereket & Leskovec 2025](https://arxiv.org/pdf/2508.11800)); [Turtel et al. 2025](https://arxiv.org/html/2505.17989v4) saw 39% extreme forecasts with plain GRPO. TRL 0.22.2 does this by default (`scale_rewards="group"`).
-- **Fix to test:** run 4 repeats run 2 with `scale_rewards="none"` (subtract the group mean only).
+- **Fix to test:** run 4 turns the scaling off (`scale_rewards="none"`, subtract the group mean only) on run 3's single-pass settings, which also collapsed (entry 5) and avoid the second-pass recall problem (entry 4).
 - **Effect:** pending run 4.
 
-## 4. The in-training gap stops meaning anything after one pass
+## 4. In-training numbers overstate what was learned
 
 - **Found:** RL run 2, comparing training and held-out numbers.
-- **What happened:** the yes-minus-no gap on training answers rose from +0.03 (first 512) to +0.38 (last 512), which reads like the model learned to discriminate. But the training Brier score didn't improve (0.300 vs 0.298), and on held-out econ questions the Brier score got worse.
-- **Why:** in the second pass every question had already been rewarded with its outcome in the first pass, so the model can partly recall answers instead of forecasting them. Turtel et al. (2025) train in a single pass for this reason.
-- **Fix:** read training curves only within the first pass; judge every run on held-out questions.
+- **What happened:** the yes-minus-no gap on training answers rose from +0.03 (first 512) to +0.25 (last 512 of the first pass) and +0.38 (end of the second pass), while the training Brier score stayed flat (0.300 vs 0.298). On held-out econ questions the ordering did improve (AUC 0.52 to 0.69), but the Brier score got worse.
+- **Why:** the gap grows when forecasts are pushed toward 0 and 1, whether or not the ordering improves (run 3 shows the gap jumping from 0.22 to 0.54 with no AUC change). In a second pass, every question has also been rewarded with its outcome once, so part of any further gain can be recall; Turtel et al. (2025) train in a single pass for this reason.
+- **Fix:** train in a single pass, track AUC rather than the gap, and judge every run on held-out questions.
+
+## 5. Collapse onto a copy-the-latest-result rule
+
+- **Found:** RL run 3 (3B, Brier reward, key numbers in the prompt, one pass, learning rate 1e-5), Oct 27, 2026.
+- **What happened:** most forecasts were at 0 or 1 within about 100 of 347 steps; by about step 240 answers had shrunk from ~110 tokens of reasoning to ~7, and all 4 answers in each group were identical (reward spread 0). On the validation econ questions, the trained model's Brier score matches the hard rule "1 if the latest result already satisfies the question, else 0" to within 0.0001 for every threshold series (Fed 0.000, unemployment 0.060, core CPI 0.095, payrolls 0.541). It answers exactly 0.00 or 1.00 and sits on the rule's side for 99.9% of threshold questions (`eval/rl_run2_run3.md`). Like that rule, it has zero ladder violations and weather brackets that sum to 1. AUC barely moved (0.757 to 0.771, interval includes 0), while calibration error rose from 0.06 to 0.22 and log loss nearly doubled.
+- **Why:** the key-numbers block made one cue easy to read ("latest result: 0.4 above the threshold"). Answers that follow it score better on average, and GRPO's std scaling (entry 3) pushes them to certainty. The certainty itself is not what the reward wants: on the training questions the rule stated at its hit rates (84% / 15%) earns a higher average Brier reward (0.870) than the 0/1 version (0.847). The rule is right for slow series and badly wrong for noisy ones (payrolls).
+- **How to catch it:** compare the trained model with simple rules built from the prompt (here, persistence of the latest result). The gap metric rose sharply (0.22 to 0.54) without any AUC gain, so gap rewards sharpening and is not a discrimination measure; use AUC.
+- **Fix to test:** run 4 (std scaling off). If it still collapses, add a KL penalty to the untrained model (`beta` > 0).
 

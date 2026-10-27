@@ -1,0 +1,15 @@
+eval_set,method,brier_raw,brier_recalibrated,auc
+heldout_weather,"Untrained, plain prompt",0.2861,0.139,0.5323
+heldout_weather,Run 1,0.2541,0.1399,0.4659
+heldout_weather,Run 2,0.2165,0.1395,0.5328
+heldout_weather,"Untrained, key numbers",0.223,0.1377,0.4421
+heldout_weather,Run 3,0.2979,0.1386,0.458
+heldout_weather,Counting rule,0.2186,0.1385,0.4316
+heldout_weather,Latest-result rule,0.2944,0.1388,0.47
+val_econ,"Untrained, plain prompt",0.272,0.2586,0.5197
+val_econ,Run 1,0.2669,0.2532,0.5438
+val_econ,Run 2,0.3198,0.2377,0.6861
+val_econ,"Untrained, key numbers",0.2014,0.215,0.7569
+val_econ,Run 3,0.2231,0.1844,0.7712
+val_econ,Counting rule,0.1677,0.1677,0.8459
+val_econ,Latest-result rule,0.218,0.1839,0.7746
