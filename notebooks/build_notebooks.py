@@ -304,7 +304,9 @@ Trains a LoRA adapter on Llama 3.2 with GRPO. For each training question the mod
 - Run 1: `RUN_NAME = "3b_brier_ctx_lr1e-5"`, `LEARNING_RATE = 1e-5`, `MAX_STEPS = -1`, `KEY_NUMBERS = False`. One pass over the 1,391 training questions, about 2.5 hours including evaluation.
 - Run 2: as run 1 but 2 passes at `LEARNING_RATE = 2e-5`.
 - **Run 3 (the settings below):** as run 1 but `KEY_NUMBERS = True`. Each prompt gets a short block that spells out the comparison between the question's threshold and the recent results (latest result vs threshold, change, how many recent results would have resolved YES, average and range). The untrained model is scored with the same prompt, so the run separates "the prompt helps" from "RL learned to use it".
-- Run 4: run 2's settings (`LEARNING_RATE = 2e-5`, `MAX_STEPS = 694`) with `SCALE_REWARDS = "none"` and `KEY_NUMBERS = False`. Run 2 collapsed to near-0/near-1 forecasts; this tests whether GRPO's division by the group's standard deviation causes it.
+- Run 4: run 3's settings with `SCALE_REWARDS = "none"` (`RUN_NAME = "3b_brier_keynum_lr1e-5_nostd"`). Runs 2 and 3 collapsed to 0/1 forecasts; this tests whether GRPO's division by the group's standard deviation causes it.
+- Shuffled-outcome control: `SHUFFLE_OUTCOMES = True`. Outcomes are randomly reassigned across training questions, so the reward carries no forecasting signal; whatever still changes is the RL process itself.
+- KL penalty: `BETA = 0.04` keeps the model close to the untrained one (the reference is the base model with the LoRA adapter switched off).
 - For a quick check of a new setup, use `MAX_STEPS = 30` first (about 40 minutes).
 
 **While it runs**, open the version's **Logs** to see lines like `format_ok 0.97 | mean_p 0.48 | sd_p 0.21 | gap +0.05 | brier 0.24` every 10 reward calls. The number to watch is **gap**: the average probability on questions that resolved yes minus on those that resolved no. Brier falling while gap stays near 0 means the model is hedging, not learning.
@@ -321,6 +323,8 @@ MAX_STEPS = -1                   # -1 = one full pass over the training question
 LEARNING_RATE = 1e-5
 LORA_RANK = 32
 SCALE_REWARDS = "group"          # "group" = TRL default (divide by the group's std); "none" = only subtract the group mean
+BETA = 0.0                       # KL penalty toward the untrained model; 0 = none (TRL default), try 0.04
+SHUFFLE_OUTCOMES = False         # control run: reward against randomly reassigned outcomes
 NUM_GENERATIONS = 4              # answers per question, compared against each other
 PER_DEVICE_BATCH = 4             # answers per forward pass (lower to 2 and raise GRAD_ACCUM to 8 if out of memory)
 GRAD_ACCUM = 4                   # 4 x 4 = 16 answers per step = 4 questions per step
@@ -386,12 +390,14 @@ model = FastLanguageModel.get_peft_model(
 Training questions only (econ, 2024–2025). Each prompt is rendered exactly as in evaluation, including the question's own date in Llama's header."""),
         code('''from datasets import Dataset
 
-records = build_train_records(df, tokenizer, include_context=INCLUDE_CONTEXT, seed=SEED, key_numbers=KEY_NUMBERS)
+records = build_train_records(df, tokenizer, include_context=INCLUDE_CONTEXT, seed=SEED, key_numbers=KEY_NUMBERS,
+                              shuffle_outcomes=SHUFFLE_OUTCOMES)
 train_ds = Dataset.from_list(records)
 prompt_lengths = [len(tokenizer(r["prompt"], add_special_tokens=False)["input_ids"]) for r in records]
 max_prompt_length = max(prompt_lengths) + 8
 print(f"{len(records)} training questions | prompt tokens: median {int(np.median(prompt_lengths))}, max {max(prompt_lengths)}")
-print(f"Yes-rate: {np.mean([r['outcome'] for r in records]):.3f}")
+print(f"Yes-rate: {np.mean([r['outcome'] for r in records]):.3f}"
+      + (f" | SHUFFLED outcomes: {np.mean([r['outcome'] == r['true_outcome'] for r in records]):.0%} match the real ones (chance is about 50%)" if SHUFFLE_OUTCOMES else ""))
 print(records[0]["prompt"][-900:])'''),
         md("""## 8. Train
 
@@ -412,6 +418,7 @@ args = GRPOConfig(
     gradient_accumulation_steps = GRAD_ACCUM,
     num_generations = NUM_GENERATIONS,
     scale_rewards = SCALE_REWARDS,
+    beta = BETA,
     max_prompt_length = max_prompt_length,
     max_completion_length = MAX_COMPLETION,
     num_train_epochs = 1,
@@ -491,9 +498,9 @@ model_cols = [c for c in ("base_single", "base_mean4", "trained_single", "traine
 if {"base_mean4", "trained_mean4"} <= set(eval_df.columns):
     eval_df = add_shift_matched(eval_df, "base_mean4", "trained_mean4")   # untrained, moved to the trained average
     model_cols.append("base_mean4_shifted")
-methods = ["market", "base_rate", "recent_hits", "always_0.5"] + model_cols
+methods = ["market", "base_rate", "recent_hits", "latest_rule", "logistic", "always_0.5"] + model_cols
 results = score_table(eval_df, methods)
-series = by_series_table(eval_df, ["market", "base_rate", "recent_hits"] + [c for c in model_cols if c.endswith("mean4")])
+series = by_series_table(eval_df, ["market", "base_rate", "logistic"] + [c for c in model_cols if c.endswith("mean4")])
 consistency = consistency_table(eval_df, ["market"] + [c for c in model_cols if c.endswith("mean4")])
 results.to_csv(f"{OUT_DIR}/eval_metrics_{RUN_NAME}.csv", index=False)
 results[["eval_set", "method", "n", "brier", "log_loss", "ece", "auc", "gap", "mean_p", "resolution"]]'''),
@@ -535,7 +542,8 @@ fig.savefig(f"{OUT_DIR}/reliability_{RUN_NAME}.png", dpi=150)
 plt.show()'''),
         md("## 13. Summary to paste back"),
         code('''print("=" * 25, "COPY FROM HERE", "=" * 25)
-print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | reward {REWARD} | context {INCLUDE_CONTEXT} | key numbers {KEY_NUMBERS}")
+print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | reward {REWARD} | context {INCLUDE_CONTEXT} | key numbers {KEY_NUMBERS}"
+      f" | beta {BETA} | shuffled outcomes {SHUFFLE_OUTCOMES}")
 print(f"Steps {trainer.state.global_step} | lr {LEARNING_RATE} | lora r {LORA_RANK} | scale_rewards {SCALE_REWARDS} | {NUM_GENERATIONS} answers/question | "
       f"{PER_DEVICE_BATCH * GRAD_ACCUM // NUM_GENERATIONS} questions/step | {TRAIN_MINUTES:.0f} min training")
 print()

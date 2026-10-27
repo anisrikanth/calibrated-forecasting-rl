@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from env import metrics as M
+from env.baselines import add_rule_baselines
 from env.features import recent_hit_rate
 from env.parser import extract_probability
 from env.prompt import build_messages, chat_template_kwargs
@@ -33,9 +34,11 @@ def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
                    weather_from: str = "2026-01-01") -> pd.DataFrame:
     """val_econ = every validation question; heldout_weather = whole days sampled from `weather_from`
     on. Adds baselines: `base_rate` (each econ series' yes-rate in train, each weather series'
-    yes-rate in held-out days before `weather_from`), `always_0.5`, `market`, and `recent_hits`
+    yes-rate in held-out days before `weather_from`), `always_0.5`, `market`, `recent_hits`
     (share of the recent results in the context that would have resolved YES under this question's
-    rule; base_rate where there is no numeric threshold or no recent result)."""
+    rule), `latest_rule` (1 if the latest result already would have, else 0) and `logistic` (a
+    logistic regression on the key numbers, fitted on train; env/baselines.py). The last three use
+    base_rate where there is no numeric threshold or no recent result."""
     val = df[df["split"] == "val"]
     held = df[df["split"] == "heldout"]
     days = held.loc[held["close_dt"] >= weather_from, "event_ticker"].drop_duplicates()
@@ -53,7 +56,7 @@ def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
     out["market"] = out["market_prob"]
     hits = pd.Series([recent_hit_rate(r) for r in out.to_dict("records")], index=out.index, dtype=float)
     out["recent_hits"] = hits.fillna(out["base_rate"])
-    return out
+    return add_rule_baselines(out, train, out["base_rate"])
 
 
 def render_prompt(tokenizer: Any, row: dict, include_context: bool = True, key_numbers: bool = False) -> str:

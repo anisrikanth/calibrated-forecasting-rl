@@ -16,7 +16,7 @@ The **key numbers** block (`env/features.py`) spells out what the question's thr
 2. **More training (run 2) learned some real ordering, but made the model overconfident.** AUC rose from 0.52 to 0.69 (+0.17, +0.10 to +0.25). But 72% of forecasts ended up at or below 0.05 or at or above 0.95, calibration error rose from 0.12 to 0.30, and the Brier score got worse (0.320). Once its forecasts are recalibrated, it does beat the untrained model (0.238 vs 0.259).
 3. **RL on top of the key numbers (run 3) collapsed onto a lookup rule.** Within about 100 steps most of its forecasts were at 0 or 1, and by about step 240 it had stopped reasoning (its eval answers have a median of 7 tokens, against 109 untrained). It answers exactly 0.00 or 1.00 according to one cue: "has the latest result already crossed the threshold?" It agrees with that rule on 99.9% of threshold questions. AUC was unchanged (0.757 to 0.771, interval −0.05 to +0.07), and calibration got much worse.
 4. **The collapse is not what the reward asks for.** On the training questions themselves, the same rule stated at its actual hit rates (84% / 15%) earns a higher average Brier reward (0.870) than the 0/1 version the model converged to (0.847). Std-scaled GRPO drove the model away from the reward's own optimum. This is the mechanism [Bereket & Leskovec (2025)](https://arxiv.org/pdf/2508.11800) describe, seen here with a Brier reward on real forecasting questions.
-5. **A one-line counting rule still beats every model.** "Share of recent results that would have resolved YES" scores Brier 0.168 and AUC 0.85 on the validation econ questions.
+5. **Simple rules on the same evidence still beat every model.** A logistic regression on five key-number features, fitted on the training questions (`env/baselines.py`), scores Brier 0.163 and AUC 0.855 on the validation econ questions; the one-line counting rule ("share of recent results that would have resolved YES") scores 0.168 and 0.846.
 6. **Weather: nothing has any discrimination.** Every method's weather Brier score, once recalibrated, is the base rate's (about 0.139). The Brier gains there come from lowering the average forecast.
 
 ## Validation econ: every method on the same 410 questions
@@ -24,7 +24,8 @@ The **key numbers** block (`env/features.py`) spells out what the question's thr
 | Method | Brier | Log loss | Calibration error (ECE) | AUC | Average forecast | Share at ≤0.05 or ≥0.95 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Market price | 0.062 | 0.200 | 0.023 | 0.977 | 0.460 | 59% |
-| Counting rule | **0.168** | **0.573** | 0.121 | **0.846** | 0.476 | 53% |
+| Logistic regression on key numbers | **0.163** | **0.522** | 0.087 | **0.855** | 0.418 | 36% |
+| Counting rule | 0.168 | 0.573 | 0.121 | 0.846 | 0.476 | 53% |
 | Untrained, key numbers | 0.201 | 0.594 | **0.060** | 0.757 | 0.482 | 6% |
 | Latest-result rule (0/1) | 0.218 | 1.003 | 0.212 | 0.775 | 0.424 | 96% |
 | Run 3 (key numbers, trained) | 0.223 | 1.030 | 0.224 | 0.771 | 0.422 | 99% |
@@ -96,5 +97,5 @@ So the collapse does not need a second pass. It appears once the model has a cue
 
 1. **Run 4: run 3's settings with `scale_rewards="none"`** (subtract the group mean only). If std scaling drives the collapse, run 4 should keep forecasts away from 0 and 1 and keep the key-numbers model's calibration. That would be the first test of the Bereket & Leskovec mechanism with a Brier reward on real forecasting questions.
 2. If run 4 still collapses, try a KL penalty toward the untrained model (`beta` > 0). Separately, a shuffled-outcome control shows what RL changes when the reward carries no signal.
-3. **Main comparison for the paper:** untrained with key numbers (0.201) and the counting rule (0.168) are the bars to beat. A trained model is only interesting if it beats both, or matches the counting rule while staying calibrated.
+3. **Main comparison for the paper:** untrained with key numbers (0.201) and the simple rules (logistic 0.163, counting rule 0.168) are the bars to beat. A trained model is only interesting if it beats the untrained one and closes most of the gap to the rules while staying calibrated.
 4. **Metrics:** AUC is the discrimination measure. The yes-minus-no gap rose from 0.22 to 0.54 in run 3 with no AUC change, so it measures sharpening, not ordering.

@@ -17,12 +17,20 @@ from env.rewards import _text, brier_reward, log_score_reward
 
 
 def build_train_records(df: pd.DataFrame, tokenizer: Any, include_context: bool = True,
-                        split: str = "train", seed: int = 3407, key_numbers: bool = False) -> list[dict]:
+                        split: str = "train", seed: int = 3407, key_numbers: bool = False,
+                        shuffle_outcomes: bool = False) -> list[dict]:
     """One record per training question: rendered prompt text, outcome, and ids for logging.
-    Shuffled so a batch mixes series and dates."""
+    (TRL reshuffles the dataset itself each pass; `shuffle_dataset=True` by default.)
+
+    `shuffle_outcomes=True` is the control run: outcomes are randomly reassigned across the training
+    questions, keeping the overall yes-rate but breaking any link between a question and its outcome.
+    The reward then uses the shuffled outcome; `true_outcome` keeps the real one for analysis."""
     rows = df[df["split"] == split].sample(frac=1.0, random_state=seed).to_dict("records")
-    return [{"prompt": render_prompt(tokenizer, r, include_context, key_numbers), "outcome": int(r["outcome"]),
-             "series_ticker": r["series_ticker"], "market_ticker": r["market_ticker"]} for r in rows]
+    true = [int(r["outcome"]) for r in rows]
+    used = list(np.random.default_rng(seed).permutation(true)) if shuffle_outcomes else true
+    return [{"prompt": render_prompt(tokenizer, r, include_context, key_numbers), "outcome": int(u),
+             "true_outcome": t, "series_ticker": r["series_ticker"], "market_ticker": r["market_ticker"]}
+            for r, u, t in zip(rows, used, true)]
 
 
 def window_stats(probs: Sequence[float | None], outcomes: Sequence[int]) -> dict:
@@ -74,8 +82,10 @@ class MonitoredScoreReward:
         probs = [extract_probability(t) for t in texts]
         rewards = [self.score(p, int(y)) for p, y in zip(probs, outcome)]
         series = kwargs.get("series_ticker") or [None] * len(texts)
-        for p, y, r, s in zip(probs, outcome, rewards, series):
-            self.records.append({"call": self.calls, "prob": p, "outcome": int(y), "reward": r, "series": s})
+        true = kwargs.get("true_outcome") or outcome
+        for p, y, r, s, t in zip(probs, outcome, rewards, series, true):
+            self.records.append({"call": self.calls, "prob": p, "outcome": int(y), "reward": r, "series": s,
+                                 "true_outcome": int(t)})
         if self.calls % self.print_every == 0:
             recent = self.records[-self.window:]
             st = window_stats([r["prob"] for r in recent], [r["outcome"] for r in recent])
@@ -88,7 +98,7 @@ class MonitoredScoreReward:
         return rewards
 
     def history(self) -> pd.DataFrame:
-        return pd.DataFrame(self.records, columns=["call", "prob", "outcome", "reward", "series"])
+        return pd.DataFrame(self.records, columns=["call", "prob", "outcome", "reward", "series", "true_outcome"])
 
     def first_last(self, n: int | None = None) -> pd.DataFrame:
         """Stats on the first and last `n` answers of training, side by side. By default n is 512,
