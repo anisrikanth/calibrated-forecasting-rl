@@ -1,0 +1,73 @@
+eval_set,comparison,metric,a,b,change,ci_low,ci_high,share_better
+heldout_weather,Run 4 vs untrained (key numbers),brier,0.223,0.223,-0.0,-0.0143,0.0144,0.497
+heldout_weather,Run 4 vs untrained (key numbers),log_loss,0.6922,0.7416,0.0494,-0.0022,0.102,0.0322
+heldout_weather,Run 4 vs untrained (key numbers),ece,0.2135,0.2085,-0.0049,-0.0358,0.0337,0.508
+heldout_weather,Run 4 vs untrained (key numbers),auc,0.4421,0.4371,-0.0051,-0.0608,0.0488,0.417
+heldout_weather,Run 4 vs untrained (key numbers),gap,-0.0477,-0.0592,-0.0115,-0.0476,0.0239,0.2582
+heldout_weather,Run 4 vs untrained (key numbers),mean_p,0.3097,0.213,-0.0967,-0.1142,-0.08,1.0
+heldout_weather,Run 4 vs run 3 (std scaling off vs on),brier,0.2979,0.223,-0.075,-0.0916,-0.0583,1.0
+heldout_weather,Run 4 vs run 3 (std scaling off vs on),log_loss,1.3795,0.7416,-0.6379,-0.7254,-0.5463,1.0
+heldout_weather,Run 4 vs run 3 (std scaling off vs on),ece,0.3007,0.2085,-0.0922,-0.1129,-0.0585,1.0
+heldout_weather,Run 4 vs run 3 (std scaling off vs on),auc,0.458,0.4371,-0.021,-0.0813,0.0415,0.2465
+heldout_weather,Run 4 vs run 3 (std scaling off vs on),gap,-0.0675,-0.0592,0.0083,-0.0518,0.0668,0.6072
+heldout_weather,Run 4 vs run 3 (std scaling off vs on),mean_p,0.1729,0.213,0.04,0.0313,0.0489,0.0
+heldout_weather,Run 4 vs counting rule,brier,0.2186,0.223,0.0044,-0.0091,0.0168,0.2475
+heldout_weather,Run 4 vs counting rule,log_loss,0.8539,0.7416,-0.1123,-0.1715,-0.0588,1.0
+heldout_weather,Run 4 vs counting rule,ece,0.204,0.2085,0.0046,-0.017,0.0306,0.2932
+heldout_weather,Run 4 vs counting rule,auc,0.4316,0.4371,0.0054,-0.0336,0.0474,0.609
+heldout_weather,Run 4 vs counting rule,gap,-0.0686,-0.0592,0.0094,-0.0298,0.0515,0.6702
+heldout_weather,Run 4 vs counting rule,mean_p,0.1667,0.213,0.0463,0.0372,0.0559,0.0
+heldout_weather,Run 4 vs logistic regression,brier,0.2002,0.223,0.0228,0.0108,0.0352,0.0002
+heldout_weather,Run 4 vs logistic regression,log_loss,0.6632,0.7416,0.0784,0.0249,0.1336,0.0028
+heldout_weather,Run 4 vs logistic regression,ece,0.175,0.2085,0.0335,0.0109,0.072,0.0028
+heldout_weather,Run 4 vs logistic regression,auc,0.4785,0.4371,-0.0414,-0.1054,0.02,0.0962
+heldout_weather,Run 4 vs logistic regression,gap,-0.0517,-0.0592,-0.0075,-0.0428,0.0296,0.3392
+heldout_weather,Run 4 vs logistic regression,mean_p,0.1935,0.213,0.0195,0.0075,0.0321,0.0005
+heldout_weather,Run 4 vs latest-result rule,brier,0.2944,0.223,-0.0715,-0.0885,-0.0541,1.0
+heldout_weather,Run 4 vs latest-result rule,log_loss,1.3631,0.7416,-0.6214,-0.7132,-0.5241,1.0
+heldout_weather,Run 4 vs latest-result rule,ece,0.2944,0.2085,-0.0859,-0.1071,-0.052,1.0
+heldout_weather,Run 4 vs latest-result rule,auc,0.47,0.4371,-0.0329,-0.0928,0.0303,0.149
+heldout_weather,Run 4 vs latest-result rule,gap,-0.06,-0.0592,0.0008,-0.0609,0.0607,0.5172
+heldout_weather,Run 4 vs latest-result rule,mean_p,0.1667,0.213,0.0463,0.0372,0.0559,0.0
+heldout_weather,Run 4 vs untrained (plain prompt),brier,0.2861,0.223,-0.0631,-0.0879,-0.038,1.0
+heldout_weather,Run 4 vs untrained (plain prompt),log_loss,0.777,0.7416,-0.0354,-0.1178,0.0444,0.808
+heldout_weather,Run 4 vs untrained (plain prompt),ece,0.3553,0.2085,-0.1468,-0.1799,-0.101,1.0
+heldout_weather,Run 4 vs untrained (plain prompt),auc,0.5323,0.4371,-0.0952,-0.1826,-0.0066,0.0185
+heldout_weather,Run 4 vs untrained (plain prompt),gap,0.0173,-0.0592,-0.0765,-0.1361,-0.017,0.0058
+heldout_weather,Run 4 vs untrained (plain prompt),mean_p,0.5175,0.213,-0.3046,-0.3249,-0.2833,1.0
+val_econ,Run 4 vs untrained (key numbers),brier,0.2014,0.1688,-0.0326,-0.0563,-0.0075,0.9945
+val_econ,Run 4 vs untrained (key numbers),log_loss,0.5938,0.519,-0.0748,-0.1394,-0.0044,0.982
+val_econ,Run 4 vs untrained (key numbers),ece,0.0602,0.0627,0.0025,-0.0361,0.0439,0.4628
+val_econ,Run 4 vs untrained (key numbers),auc,0.7569,0.8282,0.0713,0.028,0.1191,0.9995
+val_econ,Run 4 vs untrained (key numbers),gap,0.215,0.3645,0.1495,0.0964,0.2113,1.0
+val_econ,Run 4 vs untrained (key numbers),mean_p,0.4824,0.4717,-0.0107,-0.031,0.0105,0.838
+val_econ,Run 4 vs run 3 (std scaling off vs on),brier,0.2231,0.1688,-0.0543,-0.1141,-0.005,0.9855
+val_econ,Run 4 vs run 3 (std scaling off vs on),log_loss,1.0304,0.519,-0.5115,-0.8555,-0.2212,1.0
+val_econ,Run 4 vs run 3 (std scaling off vs on),ece,0.2243,0.0627,-0.1616,-0.1992,-0.0392,0.9972
+val_econ,Run 4 vs run 3 (std scaling off vs on),auc,0.7712,0.8282,0.057,0.0165,0.102,0.9988
+val_econ,Run 4 vs run 3 (std scaling off vs on),gap,0.5415,0.3645,-0.177,-0.2714,-0.075,0.0008
+val_econ,Run 4 vs run 3 (std scaling off vs on),mean_p,0.4224,0.4717,0.0493,0.0036,0.096,0.0162
+val_econ,Run 4 vs counting rule,brier,0.1677,0.1688,0.0011,-0.0301,0.0335,0.4655
+val_econ,Run 4 vs counting rule,log_loss,0.5734,0.519,-0.0545,-0.1789,0.0563,0.8
+val_econ,Run 4 vs counting rule,ece,0.1207,0.0627,-0.0581,-0.0984,0.0267,0.8688
+val_econ,Run 4 vs counting rule,auc,0.8459,0.8282,-0.0177,-0.0751,0.032,0.2547
+val_econ,Run 4 vs counting rule,gap,0.4889,0.3645,-0.1244,-0.1879,-0.0651,0.0002
+val_econ,Run 4 vs counting rule,mean_p,0.476,0.4717,-0.0043,-0.0464,0.0401,0.5875
+val_econ,Run 4 vs logistic regression,brier,0.1628,0.1688,0.006,-0.032,0.0347,0.3288
+val_econ,Run 4 vs logistic regression,log_loss,0.5219,0.519,-0.0029,-0.1325,0.1002,0.4965
+val_econ,Run 4 vs logistic regression,ece,0.087,0.0627,-0.0244,-0.0725,0.0573,0.6565
+val_econ,Run 4 vs logistic regression,auc,0.8547,0.8282,-0.0265,-0.0631,0.0085,0.0738
+val_econ,Run 4 vs logistic regression,gap,0.4584,0.3645,-0.0939,-0.146,-0.0355,0.0022
+val_econ,Run 4 vs logistic regression,mean_p,0.4179,0.4717,0.0538,0.0196,0.0871,0.0015
+val_econ,Run 4 vs latest-result rule,brier,0.218,0.1688,-0.0492,-0.1086,0.0013,0.9718
+val_econ,Run 4 vs latest-result rule,log_loss,1.0031,0.519,-0.4841,-0.8312,-0.188,1.0
+val_econ,Run 4 vs latest-result rule,ece,0.2123,0.0627,-0.1496,-0.1875,-0.0241,0.9928
+val_econ,Run 4 vs latest-result rule,auc,0.7746,0.8282,0.0536,0.0101,0.1011,0.9928
+val_econ,Run 4 vs latest-result rule,gap,0.5436,0.3645,-0.1791,-0.2732,-0.077,0.0008
+val_econ,Run 4 vs latest-result rule,mean_p,0.4245,0.4717,0.0472,0.0021,0.0928,0.018
+val_econ,Run 4 vs untrained (plain prompt),brier,0.272,0.1688,-0.1032,-0.1424,-0.0617,1.0
+val_econ,Run 4 vs untrained (plain prompt),log_loss,0.7481,0.519,-0.2291,-0.3394,-0.1067,1.0
+val_econ,Run 4 vs untrained (plain prompt),ece,0.1204,0.0627,-0.0577,-0.0969,0.0112,0.9318
+val_econ,Run 4 vs untrained (plain prompt),auc,0.5197,0.8282,0.3085,0.2396,0.3811,1.0
+val_econ,Run 4 vs untrained (plain prompt),gap,0.0155,0.3645,0.349,0.265,0.4317,1.0
+val_econ,Run 4 vs untrained (plain prompt),mean_p,0.5218,0.4717,-0.0501,-0.0893,-0.0077,0.9905

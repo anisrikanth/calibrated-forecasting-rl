@@ -1,0 +1,11 @@
+eval_set,method,brier_raw,brier_recalibrated
+heldout_weather,"Untrained, key numbers",0.223,0.1377
+heldout_weather,Run 3 (std scaling on),0.2979,0.1386
+heldout_weather,Run 4 (std scaling off),0.223,0.1388
+heldout_weather,Counting rule,0.2186,0.1385
+heldout_weather,Logistic regression,0.2002,0.1393
+val_econ,"Untrained, key numbers",0.2014,0.215
+val_econ,Run 3 (std scaling on),0.2231,0.1844
+val_econ,Run 4 (std scaling off),0.1688,0.1823
+val_econ,Counting rule,0.1677,0.1677
+val_econ,Logistic regression,0.1628,0.1652

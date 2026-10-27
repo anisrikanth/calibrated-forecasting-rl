@@ -304,9 +304,10 @@ Trains a LoRA adapter on Llama 3.2 with GRPO. For each training question the mod
 - Run 1: `RUN_NAME = "3b_brier_ctx_lr1e-5"`, `LEARNING_RATE = 1e-5`, `MAX_STEPS = -1`, `KEY_NUMBERS = False`. One pass over the 1,391 training questions, about 2.5 hours including evaluation.
 - Run 2: as run 1 but 2 passes at `LEARNING_RATE = 2e-5`.
 - **Run 3 (the settings below):** as run 1 but `KEY_NUMBERS = True`. Each prompt gets a short block that spells out the comparison between the question's threshold and the recent results (latest result vs threshold, change, how many recent results would have resolved YES, average and range). The untrained model is scored with the same prompt, so the run separates "the prompt helps" from "RL learned to use it".
-- Run 4: run 3's settings with `SCALE_REWARDS = "none"` (`RUN_NAME = "3b_brier_keynum_lr1e-5_nostd"`). Runs 2 and 3 collapsed to 0/1 forecasts; this tests whether GRPO's division by the group's standard deviation causes it.
+- Run 4: run 3's settings with `SCALE_REWARDS = "none"` (`RUN_NAME = "3b_brier_keynum_lr1e-5_nostd"`). Runs 2 and 3 collapsed to 0/1 forecasts; run 4 did not, and beat the untrained model (`eval/rl_run4.md`).
 - Shuffled-outcome control: `SHUFFLE_OUTCOMES = True`. Outcomes are randomly reassigned across training questions, so the reward carries no forecasting signal; whatever still changes is the RL process itself.
 - KL penalty: `BETA = 0.04` keeps the model close to the untrained one (the reference is the base model with the LoRA adapter switched off).
+- Repeat runs (seeds): change only `TRAIN_SEED` (and `RUN_NAME`). `SEED` stays 3407 so every run is scored on the same weather days with the same eval sampling. Set `EVAL_BASE = False` when the untrained model was already scored with the same prompt.
 - For a quick check of a new setup, use `MAX_STEPS = 30` first (about 40 minutes).
 
 **While it runs**, open the version's **Logs** to see lines like `format_ok 0.97 | mean_p 0.48 | sd_p 0.21 | gap +0.05 | brier 0.24` every 10 reward calls. The number to watch is **gap**: the average probability on questions that resolved yes minus on those that resolved no. Brier falling while gap stays near 0 means the model is hedging, not learning.
@@ -336,7 +337,8 @@ EVAL_BASE = True                 # also score the untrained model now, for a pai
 EVAL_SAMPLES = 4
 EVAL_TEMPERATURE = 0.7
 WEATHER_EVENTS = 60
-SEED = 3407
+SEED = 3407                      # picks the weather eval days and seeds eval sampling: keep fixed across runs
+TRAIN_SEED = 3407                # LoRA init, training order and training samples: change for repeat runs (1, 2, ...)
 
 REPO_URL = "https://github.com/anisrikanth/calibrated-forecasting-rl.git"
 OUT_DIR = "/kaggle/working"
@@ -383,14 +385,14 @@ model = FastLanguageModel.get_peft_model(
     target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     lora_alpha = LORA_RANK,
     use_gradient_checkpointing = "unsloth",
-    random_state = SEED,
+    random_state = TRAIN_SEED,
 )'''),
         md("""## 7. Training data
 
 Training questions only (econ, 2024–2025). Each prompt is rendered exactly as in evaluation, including the question's own date in Llama's header."""),
         code('''from datasets import Dataset
 
-records = build_train_records(df, tokenizer, include_context=INCLUDE_CONTEXT, seed=SEED, key_numbers=KEY_NUMBERS,
+records = build_train_records(df, tokenizer, include_context=INCLUDE_CONTEXT, seed=TRAIN_SEED, key_numbers=KEY_NUMBERS,
                               shuffle_outcomes=SHUFFLE_OUTCOMES)
 train_ds = Dataset.from_list(records)
 prompt_lengths = [len(tokenizer(r["prompt"], add_special_tokens=False)["input_ids"]) for r in records]
@@ -427,7 +429,7 @@ args = GRPOConfig(
     max_grad_norm = 1.0,
     report_to = "none",
     output_dir = OUTPUT_DIR,
-    seed = SEED,
+    seed = TRAIN_SEED,
 )
 
 resume = False
@@ -543,7 +545,7 @@ plt.show()'''),
         md("## 13. Summary to paste back"),
         code('''print("=" * 25, "COPY FROM HERE", "=" * 25)
 print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | reward {REWARD} | context {INCLUDE_CONTEXT} | key numbers {KEY_NUMBERS}"
-      f" | beta {BETA} | shuffled outcomes {SHUFFLE_OUTCOMES}")
+      f" | beta {BETA} | shuffled outcomes {SHUFFLE_OUTCOMES} | train seed {TRAIN_SEED}")
 print(f"Steps {trainer.state.global_step} | lr {LEARNING_RATE} | lora r {LORA_RANK} | scale_rewards {SCALE_REWARDS} | {NUM_GENERATIONS} answers/question | "
       f"{PER_DEVICE_BATCH * GRAD_ACCUM // NUM_GENERATIONS} questions/step | {TRAIN_MINUTES:.0f} min training")
 print()

@@ -1,0 +1,16 @@
+{
+ "untrained_answers_identical_to_run3": true,
+ "run4_median_tokens": 72.0,
+ "run4_readable": 1.0,
+ "run4_4_samples_identical": 0.04025974025974026,
+ "run4_share_exact_0_or_1": 0.08376623376623377,
+ "run4_econ_same_side_as_latest_rule": 0.9341772151898734,
+ "run3_econ_same_side_as_latest_rule": 1.0,
+ "keynum_untrained_econ_same_side_as_latest_rule": 0.8202531645569621,
+ "run4_auc_within_latest_rule_yes": 0.6141975308641975,
+ "run4_auc_within_latest_rule_no": 0.7145528731723904,
+ "keynum_untrained_auc_within_latest_rule_yes": 0.4703703703703704,
+ "keynum_untrained_auc_within_latest_rule_no": 0.6681400884053044,
+ "corr_run4_logistic_econ": 0.913455254915703,
+ "corr_run4_counting_econ": 0.8860327487833992
+}
