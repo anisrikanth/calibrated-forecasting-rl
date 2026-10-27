@@ -10,6 +10,8 @@ from typing import Any, Mapping
 
 import pandas as pd
 
+from env.features import key_numbers_text
+
 SYSTEM_PROMPT = (
     "You are a careful forecaster. You will get a yes/no question about an upcoming data release "
     "or measurement, the current date, and sometimes recent results for the same data series.\n"
@@ -36,18 +38,24 @@ def format_question_time(question_time: Any) -> str:
     return f"{t:%A}, {t:%B} {t.day}, {t.year}, {hour}:{t:%M} {'AM' if t.hour < 12 else 'PM'} Eastern"
 
 
-def build_user_message(row: Mapping[str, Any], include_context: bool = True) -> str:
+def build_user_message(row: Mapping[str, Any], include_context: bool = True, key_numbers: bool = False) -> str:
+    """`key_numbers` adds the threshold-vs-recent-results comparison (env/features.py) after the
+    context. It is computed from the context, so it is only added when the context is shown."""
     parts = [f"Current date: {format_question_time(row['question_time'])}",
              f"Question: {row['question_text']}"]
     context = row.get("context_text") if include_context else None
     parts.append(context if isinstance(context, str) and context.strip() else NO_CONTEXT_NOTE)
+    if key_numbers and include_context:
+        block = key_numbers_text(row)
+        if block:
+            parts.append(block)
     parts.append("What is the probability that this question resolves YES?")
     return "\n\n".join(parts)
 
 
-def build_messages(row: Mapping[str, Any], include_context: bool = True) -> list[dict]:
+def build_messages(row: Mapping[str, Any], include_context: bool = True, key_numbers: bool = False) -> list[dict]:
     return [{"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_message(row, include_context)}]
+            {"role": "user", "content": build_user_message(row, include_context, key_numbers)}]
 
 
 def chat_template_kwargs(row: Mapping[str, Any]) -> dict:

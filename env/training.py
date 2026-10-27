@@ -17,11 +17,11 @@ from env.rewards import _text, brier_reward, log_score_reward
 
 
 def build_train_records(df: pd.DataFrame, tokenizer: Any, include_context: bool = True,
-                        split: str = "train", seed: int = 3407) -> list[dict]:
+                        split: str = "train", seed: int = 3407, key_numbers: bool = False) -> list[dict]:
     """One record per training question: rendered prompt text, outcome, and ids for logging.
     Shuffled so a batch mixes series and dates."""
     rows = df[df["split"] == split].sample(frac=1.0, random_state=seed).to_dict("records")
-    return [{"prompt": render_prompt(tokenizer, r, include_context), "outcome": int(r["outcome"]),
+    return [{"prompt": render_prompt(tokenizer, r, include_context, key_numbers), "outcome": int(r["outcome"]),
              "series_ticker": r["series_ticker"], "market_ticker": r["market_ticker"]} for r in rows]
 
 

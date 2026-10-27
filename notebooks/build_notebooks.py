@@ -300,22 +300,27 @@ Trains a LoRA adapter on Llama 3.2 with GRPO. For each training question the mod
 
 **Before Run All**, in the right sidebar: **Accelerator → GPU T4 x2**, **Internet → On**, **Add Input → Your Work → Datasets →** your `markets.csv` dataset.
 
-**Recommended order:**
-1. **Shakedown:** set `MAX_STEPS = 30`, then Save & Run All (about 40 minutes). This checks that training, saving and evaluation all work.
-2. **Full run:** set `MAX_STEPS = -1` (one pass over all 1,391 training questions), then Save & Run All. On 3B, expect a few hours; the first log lines print an estimate.
+**Runs** (change only the Settings cell, then Save & Run All):
+- Run 1: `RUN_NAME = "3b_brier_ctx_lr1e-5"`, `LEARNING_RATE = 1e-5`, `MAX_STEPS = -1`, `KEY_NUMBERS = False`. One pass over the 1,391 training questions, about 2.5 hours including evaluation.
+- Run 2: as run 1 but 2 passes at `LEARNING_RATE = 2e-5`.
+- **Run 3 (the settings below):** as run 1 but `KEY_NUMBERS = True`. Each prompt gets a short block that spells out the comparison between the question's threshold and the recent results (latest result vs threshold, change, how many recent results would have resolved YES, average and range). The untrained model is scored with the same prompt, so the run separates "the prompt helps" from "RL learned to use it".
+- Run 4: run 2's settings (`LEARNING_RATE = 2e-5`, `MAX_STEPS = 694`) with `SCALE_REWARDS = "none"` and `KEY_NUMBERS = False`. Run 2 collapsed to near-0/near-1 forecasts; this tests whether GRPO's division by the group's standard deviation causes it.
+- For a quick check of a new setup, use `MAX_STEPS = 30` first (about 40 minutes).
 
 **While it runs**, open the version's **Logs** to see lines like `format_ok 0.97 | mean_p 0.48 | sd_p 0.21 | gap +0.05 | brier 0.24` every 10 reward calls. The number to watch is **gap**: the average probability on questions that resolved yes minus on those that resolved no. Brier falling while gap stays near 0 means the model is hedging, not learning.
 
 At the end, copy the block between **COPY FROM HERE** and **COPY TO HERE** back to Claude."""),
         md("## 1. Settings"),
         code('''MODEL_NAME = "unsloth/Llama-3.2-3B-Instruct"
-RUN_NAME = "3b_brier_ctx_v1"     # names the saved adapter and output files
+RUN_NAME = "3b_brier_keynum_lr1e-5"   # names the saved adapter and output files
 REWARD = "brier"                 # "brier" (main) or "log" (ablation)
 INCLUDE_CONTEXT = True           # show the series' recent results in the prompt
+KEY_NUMBERS = True               # add the threshold-vs-recent-results block (needs INCLUDE_CONTEXT)
 
-MAX_STEPS = 30                   # 30 = shakedown; -1 = one full pass over the training questions
-LEARNING_RATE = 5e-6
+MAX_STEPS = -1                   # -1 = one full pass over the training questions; 30 = quick check
+LEARNING_RATE = 1e-5
 LORA_RANK = 32
+SCALE_REWARDS = "group"          # "group" = TRL default (divide by the group's std); "none" = only subtract the group mean
 NUM_GENERATIONS = 4              # answers per question, compared against each other
 PER_DEVICE_BATCH = 4             # answers per forward pass (lower to 2 and raise GRAD_ACCUM to 8 if out of memory)
 GRAD_ACCUM = 4                   # 4 x 4 = 16 answers per step = 4 questions per step
@@ -340,7 +345,8 @@ LORA_DIR = f"{OUT_DIR}/lora_{RUN_NAME}"'''),
         md("## 4. Get the project code (env/ is tested in the repo)"),
         code(CLONE_REPO + '''
 from env.evaluation import (load_markets, pick_eval_sets, render_prompt, collect_answers, add_forecast_columns,
-                            score_table, by_series_table, consistency_table)
+                            score_table, by_series_table, consistency_table, add_shift_matched,
+                            paired_bootstrap_table)
 from env.training import build_train_records, MonitoredScoreReward
 from env.rewards import trl_format_reward
 from env import metrics as M'''),
@@ -380,13 +386,13 @@ model = FastLanguageModel.get_peft_model(
 Training questions only (econ, 2024–2025). Each prompt is rendered exactly as in evaluation, including the question's own date in Llama's header."""),
         code('''from datasets import Dataset
 
-records = build_train_records(df, tokenizer, include_context=INCLUDE_CONTEXT, seed=SEED)
+records = build_train_records(df, tokenizer, include_context=INCLUDE_CONTEXT, seed=SEED, key_numbers=KEY_NUMBERS)
 train_ds = Dataset.from_list(records)
 prompt_lengths = [len(tokenizer(r["prompt"], add_special_tokens=False)["input_ids"]) for r in records]
 max_prompt_length = max(prompt_lengths) + 8
 print(f"{len(records)} training questions | prompt tokens: median {int(np.median(prompt_lengths))}, max {max(prompt_lengths)}")
 print(f"Yes-rate: {np.mean([r['outcome'] for r in records]):.3f}")
-print(records[0]["prompt"][-600:])'''),
+print(records[0]["prompt"][-900:])'''),
         md("""## 8. Train
 
 Two rewards are added: **format** (+0.5 for a readable `Probability: 0.XX`, −1.0 otherwise) and **score** (Brier or log). The score reward also records every stated probability and prints recent stats every 10 calls."""),
@@ -405,6 +411,7 @@ args = GRPOConfig(
     per_device_train_batch_size = PER_DEVICE_BATCH,
     gradient_accumulation_steps = GRAD_ACCUM,
     num_generations = NUM_GENERATIONS,
+    scale_rewards = SCALE_REWARDS,
     max_prompt_length = max_prompt_length,
     max_completion_length = MAX_COMPLETION,
     num_train_epochs = 1,
@@ -461,7 +468,7 @@ Same questions, prompts, sampling and scoring as the Phase 2 baselines (4 answer
         code('''from vllm import SamplingParams
 
 eval_rows = eval_df.to_dict("records")
-eval_prompts = [render_prompt(tokenizer, r, INCLUDE_CONTEXT) for r in eval_rows]
+eval_prompts = [render_prompt(tokenizer, r, INCLUDE_CONTEXT, KEY_NUMBERS) for r in eval_rows]
 params = SamplingParams(n=EVAL_SAMPLES, temperature=EVAL_TEMPERATURE, top_p=0.95, max_tokens=320, seed=SEED)
 
 def run_eval(lora_request, name):
@@ -481,18 +488,33 @@ answers.to_csv(f"{OUT_DIR}/eval_answers_{RUN_NAME}.csv", index=False)
 for name in answers["condition"].unique():
     eval_df = add_forecast_columns(eval_df, answers, name, name)
 model_cols = [c for c in ("base_single", "base_mean4", "trained_single", "trained_mean4") if c in eval_df.columns]
-methods = ["market", "base_rate", "always_0.5"] + model_cols
+if {"base_mean4", "trained_mean4"} <= set(eval_df.columns):
+    eval_df = add_shift_matched(eval_df, "base_mean4", "trained_mean4")   # untrained, moved to the trained average
+    model_cols.append("base_mean4_shifted")
+methods = ["market", "base_rate", "recent_hits", "always_0.5"] + model_cols
 results = score_table(eval_df, methods)
-series = by_series_table(eval_df, ["market", "base_rate"] + [c for c in model_cols if c.endswith("mean4")])
+series = by_series_table(eval_df, ["market", "base_rate", "recent_hits"] + [c for c in model_cols if c.endswith("mean4")])
 consistency = consistency_table(eval_df, ["market"] + [c for c in model_cols if c.endswith("mean4")])
 results.to_csv(f"{OUT_DIR}/eval_metrics_{RUN_NAME}.csv", index=False)
-results[["eval_set", "method", "n", "brier", "log_loss", "ece", "reliability", "resolution"]]'''),
+results[["eval_set", "method", "n", "brier", "log_loss", "ece", "auc", "gap", "mean_p", "resolution"]]'''),
         code('''for name in answers["condition"].unique():
     ex = answers[(answers["condition"] == name) & (answers["sample"] == 0)].sample(1, random_state=SEED).iloc[0]
     q = eval_df.set_index("market_ticker").loc[ex["market_ticker"]]
     print(f"===== {name} | {ex['market_ticker']} | outcome {q['outcome']} | market {q['market_prob']}")
     print(ex["text"][:1200], "\\n")'''),
-        md("## 11. Reliability diagrams"),
+        md("""## 11. Untrained vs trained, with 95% intervals
+
+Resamples whole events (a weather day, or one release's ladder of thresholds), 4,000 draws, so the interval reflects that questions in one event move together. **AUC and gap** measure telling yes from no and are unaffected by moving every forecast up or down; `base_mean4_shifted` above is the untrained model moved to the trained model's average, so any Brier gain beyond it is not just a shift."""),
+        code('''if {"base_mean4", "trained_mean4"} <= set(eval_df.columns):
+    t0 = time.time()
+    boot = paired_bootstrap_table(eval_df, "base_mean4", "trained_mean4", n_boot=4000, seed=0)
+    boot.to_csv(f"{OUT_DIR}/paired_bootstrap_{RUN_NAME}.csv", index=False)
+    print(f"({(time.time() - t0) / 60:.1f} min)")
+    print(boot.round(4).to_string(index=False))
+else:
+    boot = None
+    print("Set EVAL_BASE = True for the paired comparison.")'''),
+        md("## 12. Reliability diagrams"),
         code('''import matplotlib.pyplot as plt
 
 scored = eval_df[eval_df["market_prob"].notna()]
@@ -511,10 +533,10 @@ fig.suptitle(f"{RUN_NAME}: untrained vs trained vs market")
 fig.tight_layout()
 fig.savefig(f"{OUT_DIR}/reliability_{RUN_NAME}.png", dpi=150)
 plt.show()'''),
-        md("## 12. Summary to paste back"),
+        md("## 13. Summary to paste back"),
         code('''print("=" * 25, "COPY FROM HERE", "=" * 25)
-print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | reward {REWARD} | context {INCLUDE_CONTEXT}")
-print(f"Steps {trainer.state.global_step} | lr {LEARNING_RATE} | lora r {LORA_RANK} | {NUM_GENERATIONS} answers/question | "
+print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | reward {REWARD} | context {INCLUDE_CONTEXT} | key numbers {KEY_NUMBERS}")
+print(f"Steps {trainer.state.global_step} | lr {LEARNING_RATE} | lora r {LORA_RANK} | scale_rewards {SCALE_REWARDS} | {NUM_GENERATIONS} answers/question | "
       f"{PER_DEVICE_BATCH * GRAD_ACCUM // NUM_GENERATIONS} questions/step | {TRAIN_MINUTES:.0f} min training")
 print()
 print("Training answers, first vs last (512 each, or half the run):")
@@ -525,8 +547,11 @@ print()
 for name in answers["condition"].unique():
     a = answers[answers["condition"] == name]
     print(f"Eval {name}: readable {a['prob'].notna().mean():.3f} | median tokens {a['n_tokens'].median():.0f}")
-print(results[["eval_set", "method", "n", "brier", "log_loss", "ece", "resolution"]].to_string(index=False))
+print(results[["eval_set", "method", "n", "brier", "log_loss", "ece", "auc", "gap", "mean_p"]].to_string(index=False))
 print()
+if boot is not None:
+    print(boot.round(4).to_string(index=False))
+    print()
 print(series.to_string())
 print()
 print(consistency.to_string(index=False))

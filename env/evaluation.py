@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from env import metrics as M
+from env.features import recent_hit_rate
 from env.parser import extract_probability
 from env.prompt import build_messages, chat_template_kwargs
 
@@ -31,8 +32,10 @@ def load_markets(path: str) -> pd.DataFrame:
 def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
                    weather_from: str = "2026-01-01") -> pd.DataFrame:
     """val_econ = every validation question; heldout_weather = whole days sampled from `weather_from`
-    on. Adds `base_rate`: each econ series' yes-rate in train, each weather series' yes-rate in
-    held-out days before `weather_from`."""
+    on. Adds baselines: `base_rate` (each econ series' yes-rate in train, each weather series'
+    yes-rate in held-out days before `weather_from`), `always_0.5`, `market`, and `recent_hits`
+    (share of the recent results in the context that would have resolved YES under this question's
+    rule; base_rate where there is no numeric threshold or no recent result)."""
     val = df[df["split"] == "val"]
     held = df[df["split"] == "heldout"]
     days = held.loc[held["close_dt"] >= weather_from, "event_ticker"].drop_duplicates()
@@ -48,12 +51,14 @@ def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
     out["base_rate"] = out["series_ticker"].map(base_rates).fillna(fallback)
     out["always_0.5"] = 0.5
     out["market"] = out["market_prob"]
+    hits = pd.Series([recent_hit_rate(r) for r in out.to_dict("records")], index=out.index, dtype=float)
+    out["recent_hits"] = hits.fillna(out["base_rate"])
     return out
 
 
-def render_prompt(tokenizer: Any, row: dict, include_context: bool = True) -> str:
+def render_prompt(tokenizer: Any, row: dict, include_context: bool = True, key_numbers: bool = False) -> str:
     """Chat-formatted prompt text, with the question's date passed to the chat template."""
-    return tokenizer.apply_chat_template(build_messages(row, include_context), tokenize=False,
+    return tokenizer.apply_chat_template(build_messages(row, include_context, key_numbers), tokenize=False,
                                          add_generation_prompt=True, **chat_template_kwargs(row))
 
 
@@ -137,3 +142,63 @@ def leak_table(eval_df: pd.DataFrame, noctx_column: str) -> pd.DataFrame:
     t["share_of_market_edge"] = ((t["base_rate_brier"] - t["noctx_brier"]) / edge).where(edge >= 0.02).round(2)
     t["flag"] = np.where(t["share_of_market_edge"] > 0.5, "CHECK", "ok")
     return t
+
+
+def add_shift_matched(eval_df: pd.DataFrame, from_col: str, to_col: str) -> pd.DataFrame:
+    """Adds `<from_col>_shifted`: `from_col` moved up or down (per eval set, on the scored
+    questions) so its average matches `to_col`'s, clipped to [0, 1]. If a trained model only beats
+    its untrained self by this much, training moved the average, not the ordering."""
+    eval_df = eval_df.copy()
+    name = f"{from_col}_shifted"
+    eval_df[name] = eval_df[from_col]
+    scored = eval_df["market_prob"].notna()
+    for eval_set in eval_df["eval_set"].unique():
+        m = eval_df["eval_set"] == eval_set
+        s = m & scored
+        shift = eval_df.loc[s, to_col].mean() - eval_df.loc[s, from_col].mean()
+        eval_df.loc[m, name] = (eval_df.loc[m, from_col] + shift).clip(0, 1)
+    return eval_df
+
+
+BOOTSTRAP_STATS = {"brier": M.brier, "log_loss": M.log_loss, "ece": M.ece, "auc": M.auc, "gap": M.gap,
+                   "mean_p": lambda p, y: float(np.mean(p))}
+HIGHER_IS_BETTER = {"auc", "gap"}
+
+
+def paired_bootstrap(g: pd.DataFrame, a: str, b: str, n_boot: int = 4000, seed: int = 0,
+                     stats: dict = None) -> pd.DataFrame:
+    """Change from method `a` to method `b` on the same questions, with a 95% interval from
+    resampling whole events (a weather day, or one release's ladder of thresholds) with replacement.
+    Questions in one event move together, so resampling single questions would make the interval
+    too narrow. `share_better` = share of draws where b beats a (mean_p: share where b is lower)."""
+    stats = stats or BOOTSTRAP_STATS
+    rng = np.random.default_rng(seed)
+    g = g.reset_index(drop=True)
+    ev = g["event_ticker"].to_numpy()
+    events = pd.unique(ev)
+    idx = {e: np.flatnonzero(ev == e) for e in events}
+    y, pa, pb = g["outcome"].to_numpy(), g[a].to_numpy(dtype=float), g[b].to_numpy(dtype=float)
+    draws = {k: np.empty(n_boot) for k in stats}
+    for i in range(n_boot):
+        pick = np.concatenate([idx[e] for e in rng.choice(events, size=len(events), replace=True)])
+        for k, f in stats.items():
+            draws[k][i] = f(pb[pick], y[pick]) - f(pa[pick], y[pick])
+    rows = []
+    for k, f in stats.items():
+        d = draws[k][~np.isnan(draws[k])]
+        lo, hi = np.percentile(d, [2.5, 97.5]) if len(d) else (np.nan, np.nan)
+        better = np.mean(d > 0) if k in HIGHER_IS_BETTER else np.mean(d < 0)
+        rows.append({"metric": k, a: f(pa, y), b: f(pb, y), "change": f(pb, y) - f(pa, y),
+                     "ci_low": lo, "ci_high": hi, "share_better": float(better) if len(d) else np.nan})
+    return pd.DataFrame(rows)
+
+
+def paired_bootstrap_table(eval_df: pd.DataFrame, a: str, b: str, n_boot: int = 4000, seed: int = 0) -> pd.DataFrame:
+    """paired_bootstrap for each eval set, on the scored questions."""
+    out = []
+    for eval_set, g in scored_subset(eval_df).groupby("eval_set"):
+        t = paired_bootstrap(g, a, b, n_boot=n_boot, seed=seed)
+        t.insert(0, "eval_set", eval_set)
+        t["events"] = g["event_ticker"].nunique()
+        out.append(t)
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame()

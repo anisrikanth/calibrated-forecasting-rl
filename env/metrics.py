@@ -15,6 +15,10 @@ Notation in words: p = forecast probability, y = outcome (1 yes, 0 no), N = numb
                   Always forecasting the base rate is perfectly calibrated but has zero resolution.
     uncertainty = overall yes-share × (1 − overall yes-share). A property of the questions, not the forecaster.
   Brier score ≈ reliability − resolution + uncertainty.
+- AUC: the chance that a random question that resolved yes got a higher forecast than a random
+  one that resolved no (ties count half). 0.5 = no discrimination; unaffected by shifting every
+  forecast up or down, so it separates "learned to tell yes from no" from "moved its average".
+- Gap: average forecast on questions that resolved yes minus on those that resolved no.
 - Ladder consistency: for thresholds of the same event ("above 100k", "above 150k", ...), the
   probability should fall as an "above" threshold rises. We count adjacent pairs that break this.
 - Partition error: for events whose markets are non-overlapping brackets covering every outcome
@@ -79,9 +83,27 @@ def murphy_decomposition(p, y, n_bins: int = 10) -> dict:
     }
 
 
+def auc(p, y) -> float:
+    p, y = _arrays(p, y)
+    pos = y == 1
+    n1, n0 = int(pos.sum()), int((~pos).sum())
+    if n1 == 0 or n0 == 0:
+        return float("nan")
+    ranks = pd.Series(p).rank(method="average").to_numpy()
+    return float((ranks[pos].sum() - n1 * (n1 + 1) / 2) / (n1 * n0))
+
+
+def gap(p, y) -> float:
+    p, y = _arrays(p, y)
+    if not (y == 1).any() or not (y == 0).any():
+        return float("nan")
+    return float(p[y == 1].mean() - p[y == 0].mean())
+
+
 def summarize(p, y, n_bins: int = 10) -> dict:
     p, y = _arrays(p, y)
-    out = {"n": int(len(p)), "brier": brier(p, y), "log_loss": log_loss(p, y), "ece": ece(p, y, n_bins)}
+    out = {"n": int(len(p)), "brier": brier(p, y), "log_loss": log_loss(p, y), "ece": ece(p, y, n_bins),
+           "auc": auc(p, y), "gap": gap(p, y), "mean_p": float(p.mean()) if len(p) else float("nan")}
     out.update(murphy_decomposition(p, y, n_bins))
     return out
 
