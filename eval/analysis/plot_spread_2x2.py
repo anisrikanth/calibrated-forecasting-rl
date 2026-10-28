@@ -5,8 +5,8 @@ Spread = standard deviation of the stated probabilities over a rolling window of
 answers. A model that answers only 0 or 1 on balanced questions has spread 0.5; one that hedges
 toward a single number has spread near 0.
 
-Usage: python eval/analysis/plot_spread_2x2.py <run1> <run7> <run3> <run4> <run5> <run6> <out_dir>
-(each argument is that run's train_answers CSV). Writes eval/figures/spread_2x2.png and
+Usage: python eval/analysis/plot_spread_2x2.py <run1> <run7> <run3> <run4> <run5> <run6> [<run8>] <out_dir>
+(each argument is that run's train_answers CSV; run 8, the shuffled-outcome control, is optional). Writes eval/figures/spread_2x2.png and
 <out_dir>/spread_2x2.csv.
 """
 import os
@@ -20,7 +20,7 @@ import pandas as pd  # noqa: E402
 
 WINDOW, EVERY, PER_STEP = 512, 64, 16
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
-ON, OFF = "#eb6834", "#2a78d6"          # std scaling on / off
+ON, OFF, CONTROL = "#eb6834", "#2a78d6", "#1baf7a"   # std scaling on / off / shuffled-outcome control
 
 
 def rolling_sd(path):
@@ -34,7 +34,7 @@ def rolling_sd(path):
 
 
 def main(paths, out_dir):
-    names = ["Run 1", "Run 7", "Run 3", "Run 4", "Run 5", "Run 6"]
+    names = ["Run 1", "Run 7", "Run 3", "Run 4", "Run 5", "Run 6", "Run 8"][:len(paths)]
     data = pd.concat([rolling_sd(p).assign(run=n) for p, n in zip(paths, names)], ignore_index=True)
     data.to_csv(os.path.join(out_dir, "spread_2x2.csv"), index=False)
 
@@ -45,7 +45,8 @@ def main(paths, out_dir):
                                                       ("Run 7", OFF, "Run 7: std scaling off")]),
               ("Key numbers in the prompt", [("Run 3", ON, "Run 3: std scaling on"),
                                              ("Run 4", OFF, "Runs 4-6: std scaling off, 3 seeds"),
-                                             ("Run 5", OFF, None), ("Run 6", OFF, None)])]
+                                             ("Run 5", OFF, None), ("Run 6", OFF, None)]
+               + ([("Run 8", CONTROL, "Run 8: std scaling off, shuffled outcomes")] if "Run 8" in names else []))]
     for ax, (title, lines) in zip(axes, panels):
         ax.set_facecolor(SURFACE)
         ax.grid(axis="y", color=GRID, lw=0.8)
@@ -56,7 +57,7 @@ def main(paths, out_dir):
         for run, color, label in lines:
             d = data[data["run"] == run]
             ax.plot(d["step"], d["sd"], color=color, lw=2 if label else 1.4, alpha=1 if label else 0.75,
-                    label=label, solid_capstyle="round")
+                    label=label, solid_capstyle="round", ls=(0, (4, 2)) if run == "Run 8" else "-")
         ax.set_title(title, loc="left", fontsize=10.5, color=INK)
         ax.set_xlabel("Training step (one pass, 4 questions per step)")
         ax.set_xlim(0, 360)

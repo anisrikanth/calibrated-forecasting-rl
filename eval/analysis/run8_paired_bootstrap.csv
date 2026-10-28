@@ -1,0 +1,25 @@
+eval_set,comparison,metric,a,b,change,ci_low,ci_high
+heldout_weather,run8 vs keynum_untrained,brier,0.223,0.223,0.0,-0.0164,0.0166
+heldout_weather,run8 vs keynum_untrained,ece,0.2135,0.2692,0.0557,0.0224,0.0844
+heldout_weather,run8 vs keynum_untrained,auc,0.442,0.4786,0.0366,-0.027,0.0965
+heldout_weather,run8 vs keynum_untrained,mean_p,0.3097,0.4359,0.1262,0.1114,0.1398
+heldout_weather,run8 vs run4,brier,0.223,0.223,0.0001,-0.0174,0.0189
+heldout_weather,run8 vs run4,ece,0.2085,0.2692,0.0607,0.0192,0.0907
+heldout_weather,run8 vs run4,auc,0.4375,0.4786,0.0411,-0.0197,0.0984
+heldout_weather,run8 vs run4,mean_p,0.213,0.4359,0.2229,0.2136,0.232
+heldout_weather,run7 vs plain_untrained,brier,0.2861,0.2907,0.0046,-0.0159,0.0238
+heldout_weather,run7 vs plain_untrained,ece,0.3553,0.3847,0.0294,0.0091,0.0479
+heldout_weather,run7 vs plain_untrained,auc,0.5322,0.5129,-0.0193,-0.1205,0.081
+heldout_weather,run7 vs plain_untrained,mean_p,0.5175,0.5514,0.0339,0.0144,0.0538
+val_econ,run8 vs keynum_untrained,brier,0.2014,0.2359,0.0345,0.0074,0.0586
+val_econ,run8 vs keynum_untrained,ece,0.0602,0.1133,0.0531,-0.0469,0.0972
+val_econ,run8 vs keynum_untrained,auc,0.7568,0.7084,-0.0484,-0.1003,0.0027
+val_econ,run8 vs keynum_untrained,mean_p,0.4824,0.5377,0.0553,0.0109,0.0971
+val_econ,run8 vs run4,brier,0.1688,0.2359,0.0671,0.0281,0.1037
+val_econ,run8 vs run4,ece,0.0627,0.1133,0.0507,-0.07,0.108
+val_econ,run8 vs run4,auc,0.8282,0.7084,-0.1197,-0.172,-0.0746
+val_econ,run8 vs run4,mean_p,0.4717,0.5377,0.066,0.0182,0.1092
+val_econ,run7 vs plain_untrained,brier,0.272,0.2629,-0.0091,-0.0258,0.0073
+val_econ,run7 vs plain_untrained,ece,0.1204,0.1073,-0.013,-0.0809,0.0381
+val_econ,run7 vs plain_untrained,auc,0.5196,0.4848,-0.0348,-0.0924,0.0193
+val_econ,run7 vs plain_untrained,mean_p,0.5218,0.5636,0.0418,0.0088,0.0772

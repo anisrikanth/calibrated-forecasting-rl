@@ -20,7 +20,7 @@ Cells show Brier / AUC. Only the bottom-right cell improves on its untrained mod
 
 ![Spread of stated probabilities during training, 2 × 2](figures/spread_2x2.png)
 
-The figure shows the same four outcomes during training. With std scaling, run 3's spread rises to 0.5, every answer at 0 or 1. Without it, runs 4 to 6 keep a spread near 0.3 when the evidence is readable, and run 7 hedges (spread 0.25 to 0.11) when it is not.
+The figure shows the same four outcomes during training (plus run 8, the shuffled-outcome control, dashed). With std scaling, run 3's spread rises to 0.5, every answer at 0 or 1. Without it, runs 4 to 6 keep a spread near 0.3 when the evidence is readable, and run 7 hedges (spread 0.25 to 0.11) when it is not.
 
 ## Validation econ: every method on the same 410 questions
 
@@ -80,4 +80,4 @@ All three seeds improve on the untrained model for core CPI (both), CPI year-ove
 
 The paper's central claim now has every cell of the 2 × 2 and three seeds behind it: **RL with a Brier reward improved this 3B model's forecasts only when the evidence was legible and GRPO's advantages were not divided by the group's standard deviation.** With legible evidence and std scaling, it collapsed onto a lookup rule. Without legible evidence, it shifted (std scaling on) or hedged (off). The improved model reaches, but does not pass, a logistic regression on the same evidence.
 
-Remaining runs: the shuffled-outcome control (run 8), the prompt ablation, two more seeds of run 3's collapse (runs 9 and 10), then one evaluation of the final settings on the untouched test split.
+The shuffled-outcome control (run 8, `rl_run8.md`) shows the gain comes from the outcomes: with them shuffled, the same setup gets worse (Brier +0.035) and hedges like run 7. Remaining: the prompt ablation, two more seeds of run 3's collapse (runs 9 and 10), then one evaluation of the final settings on the untouched test split.
