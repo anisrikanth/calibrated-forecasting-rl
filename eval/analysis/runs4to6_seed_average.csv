@@ -1,0 +1,37 @@
+eval_set,comparison,metric,reference,seed_mean,seed_sd,seed_min,seed_max,change,ci_low,ci_high
+heldout_weather,Runs 4-6 (3 seeds) vs untrained (key numbers),brier,0.223,0.2164,0.0076,0.208,0.223,-0.0067,-0.0189,0.0055
+heldout_weather,Runs 4-6 (3 seeds) vs untrained (key numbers),log_loss,0.6922,0.7001,0.0368,0.6715,0.7416,0.0079,-0.0376,0.0528
+heldout_weather,Runs 4-6 (3 seeds) vs untrained (key numbers),ece,0.2135,0.1966,0.0117,0.1852,0.2085,-0.0169,-0.0458,0.0172
+heldout_weather,Runs 4-6 (3 seeds) vs untrained (key numbers),auc,0.4421,0.4322,0.0054,0.4264,0.4371,-0.0099,-0.0572,0.0376
+heldout_weather,Runs 4-6 (3 seeds) vs untrained (key numbers),gap,-0.0477,-0.056,0.0043,-0.0592,-0.0512,-0.0084,-0.0387,0.022
+heldout_weather,Runs 4-6 (3 seeds) vs untrained (key numbers),mean_p,0.3097,0.2326,0.021,0.213,0.2548,-0.077,-0.0923,-0.0616
+heldout_weather,Runs 4-6 (3 seeds) vs logistic regression,brier,0.2002,0.2164,0.0076,0.208,0.223,0.0162,0.0056,0.0267
+heldout_weather,Runs 4-6 (3 seeds) vs logistic regression,log_loss,0.6632,0.7001,0.0368,0.6715,0.7416,0.0369,-0.0137,0.0878
+heldout_weather,Runs 4-6 (3 seeds) vs logistic regression,ece,0.175,0.1966,0.0117,0.1852,0.2085,0.0216,-0.003,0.0579
+heldout_weather,Runs 4-6 (3 seeds) vs logistic regression,auc,0.4785,0.4322,0.0054,0.4264,0.4371,-0.0463,-0.1024,0.0106
+heldout_weather,Runs 4-6 (3 seeds) vs logistic regression,gap,-0.0517,-0.056,0.0043,-0.0592,-0.0512,-0.0044,-0.0361,0.0268
+heldout_weather,Runs 4-6 (3 seeds) vs logistic regression,mean_p,0.1935,0.2326,0.021,0.213,0.2548,0.0392,0.0277,0.0506
+heldout_weather,Runs 4-6 (3 seeds) vs run 3 (std on),brier,0.2979,0.2164,0.0076,0.208,0.223,-0.0816,-0.099,-0.0635
+heldout_weather,Runs 4-6 (3 seeds) vs run 3 (std on),log_loss,1.3795,0.7001,0.0368,0.6715,0.7416,-0.6794,-0.7686,-0.5827
+heldout_weather,Runs 4-6 (3 seeds) vs run 3 (std on),ece,0.3007,0.1966,0.0117,0.1852,0.2085,-0.1041,-0.1261,-0.0707
+heldout_weather,Runs 4-6 (3 seeds) vs run 3 (std on),auc,0.458,0.4322,0.0054,0.4264,0.4371,-0.0258,-0.0802,0.0308
+heldout_weather,Runs 4-6 (3 seeds) vs run 3 (std on),gap,-0.0675,-0.056,0.0043,-0.0592,-0.0512,0.0115,-0.0549,0.0732
+heldout_weather,Runs 4-6 (3 seeds) vs run 3 (std on),mean_p,0.1729,0.2326,0.021,0.213,0.2548,0.0597,0.0514,0.068
+val_econ,Runs 4-6 (3 seeds) vs untrained (key numbers),brier,0.2014,0.1705,0.0014,0.1688,0.1713,-0.0309,-0.0489,-0.0125
+val_econ,Runs 4-6 (3 seeds) vs untrained (key numbers),log_loss,0.5938,0.5222,0.0041,0.519,0.5269,-0.0715,-0.1181,-0.0241
+val_econ,Runs 4-6 (3 seeds) vs untrained (key numbers),ece,0.0602,0.068,0.0177,0.0536,0.0877,0.0078,-0.0271,0.0377
+val_econ,Runs 4-6 (3 seeds) vs untrained (key numbers),auc,0.7569,0.8266,0.0064,0.8197,0.8321,0.0698,0.0288,0.1154
+val_econ,Runs 4-6 (3 seeds) vs untrained (key numbers),gap,0.215,0.3326,0.0284,0.3102,0.3645,0.1176,0.0737,0.17
+val_econ,Runs 4-6 (3 seeds) vs untrained (key numbers),mean_p,0.4824,0.5,0.03,0.4717,0.5315,0.0176,-0.0004,0.0358
+val_econ,Runs 4-6 (3 seeds) vs logistic regression,brier,0.1628,0.1705,0.0014,0.1688,0.1713,0.0077,-0.0348,0.0407
+val_econ,Runs 4-6 (3 seeds) vs logistic regression,log_loss,0.5219,0.5222,0.0041,0.519,0.5269,0.0004,-0.139,0.1213
+val_econ,Runs 4-6 (3 seeds) vs logistic regression,ece,0.087,0.068,0.0177,0.0536,0.0877,-0.019,-0.0835,0.0783
+val_econ,Runs 4-6 (3 seeds) vs logistic regression,auc,0.8547,0.8266,0.0064,0.8197,0.8321,-0.028,-0.0608,0.0056
+val_econ,Runs 4-6 (3 seeds) vs logistic regression,gap,0.4584,0.3326,0.0284,0.3102,0.3645,-0.1258,-0.1863,-0.0631
+val_econ,Runs 4-6 (3 seeds) vs logistic regression,mean_p,0.4179,0.5,0.03,0.4717,0.5315,0.0821,0.047,0.1171
+val_econ,Runs 4-6 (3 seeds) vs run 3 (std on),brier,0.2231,0.1705,0.0014,0.1688,0.1713,-0.0527,-0.1164,0.0015
+val_econ,Runs 4-6 (3 seeds) vs run 3 (std on),log_loss,1.0304,0.5222,0.0041,0.519,0.5269,-0.5082,-0.8604,-0.2096
+val_econ,Runs 4-6 (3 seeds) vs run 3 (std on),ece,0.2243,0.068,0.0177,0.0536,0.0877,-0.1563,-0.2155,-0.0156
+val_econ,Runs 4-6 (3 seeds) vs run 3 (std on),auc,0.7712,0.8266,0.0064,0.8197,0.8321,0.0555,0.0215,0.0945
+val_econ,Runs 4-6 (3 seeds) vs run 3 (std on),gap,0.5415,0.3326,0.0284,0.3102,0.3645,-0.2089,-0.3118,-0.1007
+val_econ,Runs 4-6 (3 seeds) vs run 3 (std on),mean_p,0.4224,0.5,0.03,0.4717,0.5315,0.0776,0.0298,0.126

@@ -6,7 +6,7 @@ notebook, because it needs the GPU; everything here runs anywhere and is unit-te
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -59,10 +59,11 @@ def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
     return add_rule_baselines(out, train, out["base_rate"])
 
 
-def render_prompt(tokenizer: Any, row: dict, include_context: bool = True, key_numbers: bool = False) -> str:
+def render_prompt(tokenizer: Any, row: dict, include_context: bool = True, key_numbers: bool = False,
+                  key_parts: Optional[Sequence[str]] = None, estimate_first: bool = False) -> str:
     """Chat-formatted prompt text, with the question's date passed to the chat template."""
-    return tokenizer.apply_chat_template(build_messages(row, include_context, key_numbers), tokenize=False,
-                                         add_generation_prompt=True, **chat_template_kwargs(row))
+    return tokenizer.apply_chat_template(build_messages(row, include_context, key_numbers, key_parts, estimate_first),
+                                         tokenize=False, add_generation_prompt=True, **chat_template_kwargs(row))
 
 
 def collect_answers(rows: Sequence[dict], outputs: Sequence[Any], condition: str) -> pd.DataFrame:

@@ -6,7 +6,7 @@ It never sees the market price, the outcome, or anything dated after the questio
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional, Sequence
 
 import pandas as pd
 
@@ -21,6 +21,10 @@ SYSTEM_PROMPT = (
 )
 
 NO_CONTEXT_NOTE = "No recent results are provided for this question."
+FINAL_QUESTION = "What is the probability that this question resolves YES?"
+ESTIMATE_FIRST_QUESTION = ("First estimate the value this question is about (one number, with a brief reason). "
+                           "Then compare your estimate with the question's threshold, and give the probability "
+                           "that this question resolves YES.")
 
 
 def question_datetime_et(question_time: Any) -> pd.Timestamp:
@@ -38,24 +42,29 @@ def format_question_time(question_time: Any) -> str:
     return f"{t:%A}, {t:%B} {t.day}, {t.year}, {hour}:{t:%M} {'AM' if t.hour < 12 else 'PM'} Eastern"
 
 
-def build_user_message(row: Mapping[str, Any], include_context: bool = True, key_numbers: bool = False) -> str:
+def build_user_message(row: Mapping[str, Any], include_context: bool = True, key_numbers: bool = False,
+                       key_parts: Optional[Sequence[str]] = None, estimate_first: bool = False) -> str:
     """`key_numbers` adds the threshold-vs-recent-results comparison (env/features.py) after the
-    context. It is computed from the context, so it is only added when the context is shown."""
+    context. It is computed from the context, so it is only added when the context is shown.
+    For the prompt ablation: `key_parts` shows only some of the block's lines, and `estimate_first`
+    asks the model to estimate the underlying value before giving a probability."""
     parts = [f"Current date: {format_question_time(row['question_time'])}",
              f"Question: {row['question_text']}"]
     context = row.get("context_text") if include_context else None
     parts.append(context if isinstance(context, str) and context.strip() else NO_CONTEXT_NOTE)
     if key_numbers and include_context:
-        block = key_numbers_text(row)
+        block = key_numbers_text(row, key_parts)
         if block:
             parts.append(block)
-    parts.append("What is the probability that this question resolves YES?")
+    parts.append(ESTIMATE_FIRST_QUESTION if estimate_first else FINAL_QUESTION)
     return "\n\n".join(parts)
 
 
-def build_messages(row: Mapping[str, Any], include_context: bool = True, key_numbers: bool = False) -> list[dict]:
+def build_messages(row: Mapping[str, Any], include_context: bool = True, key_numbers: bool = False,
+                   key_parts: Optional[Sequence[str]] = None, estimate_first: bool = False) -> list[dict]:
     return [{"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_message(row, include_context, key_numbers)}]
+            {"role": "user", "content": build_user_message(row, include_context, key_numbers, key_parts,
+                                                           estimate_first)}]
 
 
 def chat_template_kwargs(row: Mapping[str, Any]) -> dict:

@@ -575,8 +575,161 @@ print("=" * 25, "COPY TO HERE", "=" * 27)'''),
     return nb
 
 
+def prompt_ablation() -> nbf.NotebookNode:
+    cells = [
+        md("""# Prompt ablation: which part of the key numbers does the work?
+
+On the validation econ questions, adding the key-numbers block to the prompt raised the **untrained** 3B model's AUC from 0.52 to 0.76 (`eval/rl_run2_run3.md`). This notebook finds out which lines are responsible. It scores the untrained model, **no training**, under several prompts that reveal the block one line at a time, plus one that asks the model to estimate the underlying number before giving a probability.
+
+Everything else matches the training notebook: same model loading, same questions, 4 answers at temperature 0.7, averaged, same sampling seed. The `plain` and `full` prompts are the ones already scored in runs 1 and 3, so they double as a check that results reproduce.
+
+**Before Run All**, in the right sidebar: **Accelerator → GPU T4 x2**, **Internet → On**, **Add Input → Your Work → Datasets →** your `markets.csv` dataset. Then **Save Version → Save & Run All**. About 80 minutes for 7 prompts on the econ questions (about 10 minutes per prompt; adding the weather questions roughly doubles that).
+
+Answers are saved after every prompt, so a session that runs out of time still keeps the finished ones. At the end, copy the block between **COPY FROM HERE** and **COPY TO HERE** back to Claude, and download `prompt_ablation_answers.csv`."""),
+        md("## 1. Settings"),
+        code('''MODEL_NAME = "unsloth/Llama-3.2-3B-Instruct"
+RUN_NAME = "prompt_ablation_3b"
+EVAL_SETS = ["val_econ"]          # add "heldout_weather" if there's GPU time (about doubles the run)
+
+# Each prompt: the recent results are always shown; then optionally some lines of the key-numbers block
+# (rule = the question's YES condition; latest = latest result vs threshold; change = change from the
+# result before; hits = how many recent results would have resolved YES; range = average, lowest, highest).
+VARIANTS = {
+    "plain":            dict(),                                                   # as in run 1
+    "rule":             dict(key_numbers=True, key_parts=["rule"]),
+    "rule_latest":      dict(key_numbers=True, key_parts=["rule", "latest"]),
+    "rule_latest_hits": dict(key_numbers=True, key_parts=["rule", "latest", "hits"]),
+    "full":             dict(key_numbers=True),                                   # as in runs 3-5
+    "rule_hits":        dict(key_numbers=True, key_parts=["rule", "hits"]),
+    "estimate_first":   dict(estimate_first=True),        # plain context; estimate the number, then compare
+}
+
+EVAL_SAMPLES = 4
+EVAL_TEMPERATURE = 0.7
+WEATHER_EVENTS = 60
+SEED = 3407                       # same weather days and eval sampling as every training run
+LORA_RANK = 32                    # only so the model loads exactly as in the training notebook
+
+REPO_URL = "https://github.com/anisrikanth/calibrated-forecasting-rl.git"
+OUT_DIR = "/kaggle/working"'''),
+        md("## 2. Check the GPU"),
+        code(GPU_CHECK),
+        md("## 3. Install Unsloth, vLLM and TRL (5–10 minutes)"),
+        code(INSTALL),
+        md("## 4. Get the project code"),
+        code(CLONE_REPO + '''
+from env.evaluation import (load_markets, pick_eval_sets, render_prompt, collect_answers, add_forecast_columns,
+                            score_table, paired_bootstrap_table)
+from env.prompt import build_user_message
+from env import metrics as M'''),
+        md("## 5. Load the data"),
+        code('''import glob
+import numpy as np
+import pandas as pd
+
+paths = glob.glob("/kaggle/input/**/markets.csv", recursive=True)
+assert paths, "No markets.csv found. Add your dataset: Add Input > Your Work > Datasets."
+df = load_markets(paths[0])
+eval_df = pick_eval_sets(df, weather_events=WEATHER_EVENTS, seed=SEED)
+eval_df = eval_df[eval_df["eval_set"].isin(EVAL_SETS)].reset_index(drop=True)
+eval_rows = eval_df.to_dict("records")
+print(eval_df.groupby("eval_set").size().to_dict())'''),
+        md("What each prompt adds, for one question (only the end of the message, after the recent results):"),
+        code('''example = next(r for r in eval_rows if r["series_ticker"] == "KXU3")
+plain_text = build_user_message(example, True)
+cut = plain_text.rfind("\\n\\n")
+for name, kw in VARIANTS.items():
+    text = build_user_message(example, True, **kw)
+    print(f"===== {name}")
+    print(text[cut:].strip(), "\\n")'''),
+        md("## 6. Load the model (untrained, loaded as in the training notebook)"),
+        code('''from unsloth import FastLanguageModel
+import torch
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name = MODEL_NAME,
+    max_seq_length = 1536,
+    load_in_4bit = False,
+    fast_inference = True,
+    max_lora_rank = LORA_RANK,
+    gpu_memory_utilization = 0.85,   # lower to 0.7 if out of memory
+)'''),
+        md("## 7. Score each prompt (answers saved after each one)"),
+        code('''import time
+from vllm import SamplingParams
+
+params = SamplingParams(n=EVAL_SAMPLES, temperature=EVAL_TEMPERATURE, top_p=0.95, max_tokens=320, seed=SEED)
+answers_path = f"{OUT_DIR}/prompt_ablation_answers.csv"
+all_answers = []
+for name, kw in VARIANTS.items():
+    t0 = time.time()
+    prompts = [render_prompt(tokenizer, r, True, **kw) for r in eval_rows]
+    outs = model.fast_generate(prompts, sampling_params=params)
+    ans = collect_answers(eval_rows, outs, name)
+    all_answers.append(ans)
+    pd.concat(all_answers, ignore_index=True).to_csv(answers_path, index=False)
+    tmp = add_forecast_columns(eval_df, ans, name, name)
+    e = tmp[(tmp["eval_set"] == "val_econ") & tmp["market_prob"].notna()]
+    print(f"{name:18s} {(time.time() - t0) / 60:4.1f} min | readable {ans['prob'].notna().mean():.3f} | "
+          f"median tokens {ans['n_tokens'].median():.0f} | econ Brier {M.brier(e[name + '_mean4'], e['outcome']):.4f} | "
+          f"econ AUC {M.auc(e[name + '_mean4'], e['outcome']):.3f}")
+answers = pd.concat(all_answers, ignore_index=True)'''),
+        md("## 8. Results"),
+        code('''for name in VARIANTS:
+    eval_df = add_forecast_columns(eval_df, answers, name, name)
+cols = [f"{n}_mean4" for n in VARIANTS]
+methods = ["market", "base_rate", "logistic", "recent_hits", "latest_rule"] + cols
+results = score_table(eval_df, methods)
+results.to_csv(f"{OUT_DIR}/prompt_ablation_metrics.csv", index=False)
+results[["eval_set", "method", "n", "brier", "log_loss", "ece", "auc", "mean_p"]]'''),
+        md("""Each prompt against `plain` and against `full`, with 95% intervals from resampling whole releases (2,000 draws). Brier and AUC only."""),
+        code('''boots = []
+for ref in ("plain", "full"):
+    for name in VARIANTS:
+        if name == ref:
+            continue
+        t = paired_bootstrap_table(eval_df, f"{ref}_mean4", f"{name}_mean4", n_boot=2000, seed=0)
+        t = t[t["metric"].isin(["brier", "auc"])].drop(columns=[f"{ref}_mean4", f"{name}_mean4"])
+        boots.append(t.assign(comparison=f"{name} vs {ref}"))
+boot = pd.concat(boots, ignore_index=True)[["eval_set", "comparison", "metric", "change", "ci_low", "ci_high"]]
+boot.to_csv(f"{OUT_DIR}/prompt_ablation_bootstrap.csv", index=False)
+boot.round(4)'''),
+        md("AUC by series (econ), to see whether a gain is broad or comes from one series:"),
+        code('''econ = eval_df[(eval_df["eval_set"] == "val_econ") & eval_df["market_prob"].notna()]
+by_series = econ.groupby("series_ticker").apply(
+    lambda g: pd.Series({"n": len(g), **{n: round(M.auc(g[f"{n}_mean4"], g["outcome"]), 3) for n in VARIANTS}}))
+by_series["n"] = by_series["n"].astype(int)
+by_series'''),
+        md("One `estimate_first` answer, to check the model really estimates a number first:"),
+        code('''ex = answers[(answers["condition"] == "estimate_first") & (answers["sample"] == 0)].sample(2, random_state=SEED)
+for _, a in ex.iterrows():
+    q = eval_df.set_index("market_ticker").loc[a["market_ticker"]]
+    print(f"===== {a['market_ticker']} | outcome {q['outcome']}")
+    print(a["text"][:1000], "\\n")'''),
+        md("## 9. Summary to paste back"),
+        code('''print("=" * 25, "COPY FROM HERE", "=" * 25)
+print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | eval sets {EVAL_SETS} | {EVAL_SAMPLES} samples at {EVAL_TEMPERATURE}")
+print(answers.groupby("condition").agg(readable=("prob", lambda s: round(s.notna().mean(), 3)),
+                                       median_tokens=("n_tokens", "median")).loc[list(VARIANTS)].to_string())
+print()
+print(results[["eval_set", "method", "n", "brier", "log_loss", "ece", "auc", "mean_p"]].to_string(index=False))
+print()
+print(boot.round(4).to_string(index=False))
+print()
+print(by_series.to_string())
+print("=" * 25, "COPY TO HERE", "=" * 27)'''),
+    ]
+    nb = nbf.v4.new_notebook()
+    nb.cells = cells
+    nb.metadata = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+                   "language_info": {"name": "python"}}
+    nbf.validate(nb)
+    return nb
+
+
 if __name__ == "__main__":
-    for name, build in (("phase2_baselines.ipynb", baselines), ("phase3_grpo_train.ipynb", training)):
+    for name, build in (("phase2_baselines.ipynb", baselines), ("phase3_grpo_train.ipynb", training),
+                        ("phase2b_prompt_ablation.ipynb", prompt_ablation)):
         out = HERE / name
         nbf.write(build(), out)
         print("wrote", out)

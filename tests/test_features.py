@@ -224,3 +224,42 @@ def test_train_records_with_key_numbers():
     assert all(HEADER in r["prompt"] for r in with_block)
     assert not any(HEADER in r["prompt"] for r in without)
     assert [r["market_ticker"] for r in with_block] == [r["market_ticker"] for r in without]
+
+
+def test_key_number_parts_for_the_ablation():
+    from env.features import PARTS
+    row = cpi_row()
+    assert key_numbers_text(row) == key_numbers_text(row, PARTS) == key_numbers_text(row, list(reversed(PARTS)))
+    only_rule = key_numbers_text(row, ["rule"]).split("\n")
+    assert only_rule == [HEADER, "- This question resolves YES if the result is above 2.7%."]
+    rule_hits = key_numbers_text(row, ["rule", "hits"]).split("\n")
+    assert rule_hits[1].startswith("- This question resolves YES") and rule_hits[2].startswith("- Recent results that would")
+    assert len(rule_hits) == 3
+    full = key_numbers_text(row).split("\n")
+    assert key_numbers_text(row, ["rule", "latest", "hits"]).split("\n") == [full[0], full[1], full[2], full[4]]
+    with pytest.raises(ValueError):
+        key_numbers_text(row, ["rule", "median"])
+    assert key_numbers_text(cpi_row(context_json="[]"), ["latest"]).endswith("No earlier numeric results are available.")
+
+
+def test_estimate_first_prompt():
+    from env.prompt import ESTIMATE_FIRST_QUESTION, FINAL_QUESTION
+    row = cpi_row()
+    plain = build_user_message(row, True)
+    est = build_user_message(row, True, estimate_first=True)
+    assert plain.endswith(FINAL_QUESTION) and est.endswith(ESTIMATE_FIRST_QUESTION)
+    assert est.replace(ESTIMATE_FIRST_QUESTION, FINAL_QUESTION) == plain
+    both = build_user_message(row, True, key_numbers=True, key_parts=["rule"], estimate_first=True)
+    assert HEADER in both and both.endswith(ESTIMATE_FIRST_QUESTION) and "Latest result" not in both
+
+
+def test_render_prompt_passes_ablation_options():
+    from env.evaluation import render_prompt
+
+    class Tok:
+        def apply_chat_template(self, messages, tokenize=False, add_generation_prompt=True, date_string=None):
+            return messages[1]["content"]
+
+    row = cpi_row()
+    assert render_prompt(Tok(), row, True, True, ["rule"]) == build_user_message(row, True, True, ["rule"])
+    assert render_prompt(Tok(), row, include_context=True, estimate_first=True) == build_user_message(row, True, estimate_first=True)

@@ -1,0 +1,27 @@
+eval_set,method,brier,log_loss,ece,auc,mean_p,sd_p,share_extreme,share_near_half
+heldout_weather,Market,0.1008,0.3178,0.055,0.8596,0.1707,0.1893,0.4111,0.0583
+heldout_weather,Logistic regression,0.2002,0.6632,0.175,0.4785,0.1935,0.2153,0.2917,0.0278
+heldout_weather,Counting rule,0.2186,0.8539,0.204,0.4316,0.1667,0.2466,0.5389,0.0
+heldout_weather,Latest-result rule,0.2944,1.3631,0.2944,0.47,0.1667,0.3732,1.0,0.0
+heldout_weather,Base rate,0.1389,0.4506,0.0,0.5,0.1667,0.0,0.0,0.0
+heldout_weather,"Untrained, plain prompt",0.2861,0.777,0.3553,0.5323,0.5175,0.1702,0.0056,0.225
+heldout_weather,"Untrained, key numbers",0.223,0.6922,0.2135,0.4421,0.3097,0.2249,0.1111,0.1056
+heldout_weather,"Run 1: plain, std on",0.2541,0.7004,0.2891,0.4659,0.4486,0.1791,0.0139,0.2028
+heldout_weather,"Run 3: key numbers, std on",0.2979,1.3795,0.3007,0.458,0.1729,0.375,0.9806,0.0
+heldout_weather,"Run 4: key numbers, std off (seed 3407)",0.223,0.7416,0.2085,0.4371,0.213,0.2563,0.4028,0.05
+heldout_weather,"Run 5: key numbers, std off (seed 1)",0.208,0.6715,0.1852,0.4264,0.2302,0.2259,0.2889,0.0583
+heldout_weather,"Run 6: key numbers, std off (seed 2)",0.2181,0.6872,0.1961,0.4332,0.2548,0.2356,0.2306,0.0833
+heldout_weather,"Run 7: plain, std off",0.2907,0.776,0.3847,0.513,0.5514,0.0789,0.0,0.3278
+val_econ,Market,0.0615,0.1997,0.0232,0.9768,0.4599,0.4169,0.5854,0.0366
+val_econ,Logistic regression,0.1628,0.5219,0.087,0.8547,0.4179,0.375,0.3634,0.022
+val_econ,Counting rule,0.1677,0.5734,0.1207,0.8459,0.476,0.4029,0.5317,0.078
+val_econ,Latest-result rule,0.218,1.0031,0.2123,0.7746,0.4245,0.4888,0.9634,0.0
+val_econ,Base rate,0.2432,0.6791,0.0423,0.5772,0.4951,0.0827,0.0,0.478
+val_econ,"Untrained, plain prompt",0.272,0.7481,0.1204,0.5197,0.5218,0.1663,0.0122,0.2268
+val_econ,"Untrained, key numbers",0.2014,0.5938,0.0602,0.7569,0.4824,0.2438,0.0561,0.1439
+val_econ,"Run 1: plain, std on",0.2669,0.7337,0.1229,0.5438,0.4623,0.1809,0.0024,0.2073
+val_econ,"Run 3: key numbers, std on",0.2231,1.0304,0.2243,0.7712,0.4224,0.4928,0.9902,0.0
+val_econ,"Run 4: key numbers, std off (seed 3407)",0.1688,0.519,0.0627,0.8282,0.4717,0.3188,0.1634,0.0512
+val_econ,"Run 5: key numbers, std off (seed 1)",0.1713,0.5209,0.0536,0.8197,0.4968,0.2869,0.0463,0.0537
+val_econ,"Run 6: key numbers, std off (seed 2)",0.1713,0.5269,0.0877,0.8321,0.5315,0.2686,0.0317,0.0976
+val_econ,"Run 7: plain, std off",0.2629,0.7198,0.1073,0.4848,0.5636,0.0611,0.0,0.239

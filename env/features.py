@@ -21,9 +21,10 @@ from __future__ import annotations
 import json
 import math
 import re
-from typing import Any, Callable, Mapping, Optional, Tuple
+from typing import Any, Callable, Mapping, Optional, Sequence, Tuple
 
 HEADER = "Key numbers (worked out from the question and the recent results above):"
+PARTS = ("rule", "latest", "change", "hits", "range")   # the block's lines, in order; see key_numbers_text
 DIFF_UNITS = {"%": " percentage points", "°": "°", "": ""}
 
 
@@ -122,26 +123,35 @@ def recent_hit_rate(row: Mapping[str, Any]) -> Optional[float]:
     return k["hits"] / len(k["values"]) if k and k["values"] else None
 
 
-def key_numbers_text(row: Mapping[str, Any]) -> Optional[str]:
+def key_numbers_text(row: Mapping[str, Any], parts: Optional[Sequence[str]] = None) -> Optional[str]:
+    """The block, or None if the question has no numeric threshold. `parts` picks which lines to
+    show (a subset of PARTS, kept in PARTS order), for the prompt ablation; None shows all of them."""
     k = key_numbers(row)
     if k is None:
         return None
+    parts = PARTS if parts is None else tuple(parts)
+    unknown = set(parts) - set(PARTS)
+    if unknown:
+        raise ValueError(f"unknown key-number parts {sorted(unknown)}; choose from {PARTS}")
     unit, nums = k["unit"], k["values"]
-    lines = [HEADER, f"- This question resolves YES if the result is {k['rule']}."]
+    lines = [HEADER]
+    if "rule" in parts:
+        lines.append(f"- This question resolves YES if the result is {k['rule']}.")
     if not nums:
         lines.append("- No earlier numeric results are available.")
         return "\n".join(lines)
     label, latest = k["labels"][-1], nums[-1]
-    lines.append(f"- Latest result{f' ({label})' if label else ''}: {fmt(latest, unit)}, "
-                 f"{_position(latest, k['ref'], unit)}.")
-    if len(nums) >= 2:
+    if "latest" in parts:
+        lines.append(f"- Latest result{f' ({label})' if label else ''}: {fmt(latest, unit)}, "
+                     f"{_position(latest, k['ref'], unit)}.")
+    if "change" in parts and len(nums) >= 2:
         prev, d = nums[-2], nums[-1] - nums[-2]
         sign = "+" if d > 1e-9 else ("-" if d < -1e-9 else "")
         lines.append(f"- Change from the result before: {sign}{fmt(abs(d))}{DIFF_UNITS.get(unit, '')} "
                      f"(from {fmt(prev, unit)} to {fmt(latest, unit)}).")
-    lines += [
-        f"- Recent results that would have resolved YES: {k['hits']} of {len(nums)}.",
-        f"- Recent results: average {fmt(sum(nums) / len(nums), unit)}, lowest {fmt(min(nums), unit)}, "
-        f"highest {fmt(max(nums), unit)}.",
-    ]
+    if "hits" in parts:
+        lines.append(f"- Recent results that would have resolved YES: {k['hits']} of {len(nums)}.")
+    if "range" in parts:
+        lines.append(f"- Recent results: average {fmt(sum(nums) / len(nums), unit)}, lowest {fmt(min(nums), unit)}, "
+                     f"highest {fmt(max(nums), unit)}.")
     return "\n".join(lines)
