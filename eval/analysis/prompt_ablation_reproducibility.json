@@ -1,0 +1,18 @@
+{
+ "plain": {
+  "brier_now": 0.27213049224695124,
+  "brier_before": 0.27204523310060974,
+  "auc_now": 0.5193325193325193,
+  "auc_before": 0.5196557255380785,
+  "corr_of_forecasts": 0.9999799503581849,
+  "share_identical_answers": 0.001829268292682927
+ },
+ "full": {
+  "brier_now": 0.19999471698594176,
+  "brier_before": 0.20139075267123982,
+  "auc_now": 0.7593191122602887,
+  "auc_before": 0.7568890804184922,
+  "corr_of_forecasts": 0.9839621635620048,
+  "share_identical_answers": 0.8810975609756098
+ }
+}
