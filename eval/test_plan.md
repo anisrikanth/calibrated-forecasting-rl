@@ -1,6 +1,6 @@
 # Test-set plan, fixed before the test split is scored
 
-Written 28 October 2026 and amended once on 29 October (see "Changes made before scoring"), both before any model has seen or been scored on the test split. It is committed to the repo before the test notebook (`notebooks/phase4_test_eval.ipynb`) runs; the notebook refuses to run without it and prints the repo commit, so the commit history shows the plan came first. Nothing below changes after the test results are in.
+Written 28 October 2026 and amended twice on 29 October (see "Changes made before scoring"), all before any model has seen or been scored on the test split. It is committed to the repo before the test notebook (`notebooks/phase4_test_eval.ipynb`) runs; the notebook refuses to run without it and prints the repo commit, so the commit history shows the plan came first. Nothing below changes after the test results are in.
 
 So far the only things looked at in the test split are its size, dates, series and yes-rate (below). No model, rule or baseline has been scored on it.
 
@@ -19,7 +19,7 @@ So far the only things looked at in the test split are its size, dates, series a
 | | Run 8 (shuffled outcomes) | Key numbers | Off |
 | Optional | Run 2 (2 passes, learning rate 2e-5) | Plain | On |
 
-**Baselines, on the same questions.** Market price, base rate (each series' yes-rate in train), counting rule, latest-result rule, logistic regression on the key numbers (fitted on train only, as in validation, so it learns from the same questions as the models), always 0.5.
+**Baselines, on the same questions.** Market price, base rate (each series' yes-rate in train), counting rule, latest-result rule, logistic regression on the key numbers (fitted on train only, as in validation, so it learns from the same questions as the models), always 0.5. Also two gradient-boosted-tree models on the key numbers, one with the series as an extra feature, fitted on train with settings chosen by cross-validation on train (`eval/analysis/gbm_baseline.py`). They involve no language model, so they are scored by running that script on the test split rather than in the notebook.
 
 **Fixed procedure.** Each model gets the prompt it was trained with. 4 answers per question at temperature 0.7, top-p 0.95, at most 320 tokens, sampling seed 3407. An unreadable answer counts as 0.5. The forecast is the average of the 4 answers. Metrics: Brier score, log loss, calibration error (10 equal-width bins) and AUC. Intervals are 95%, from 4,000 bootstrap draws that resample whole releases. A group comparison averages the group's models within every draw, so its interval covers question sampling, not seed variation; the spread across seeds is reported separately (lowest and highest).
 
@@ -53,6 +53,7 @@ So far the only things looked at in the test split are its size, dates, series a
 - **S3.** Std-scaling-on runs vs the untrained model, key numbers. Validation: Brier +0.017 (−0.038 to +0.080); log loss +0.396 (+0.101 to +0.730) and calibration error +0.156 (+0.038 to +0.204), both clearly worse.
 - **S4 and S5.** Run 7 and run 1 (plain prompt) vs the untrained model, plain prompt. Validation: no improvement in Brier or AUC.
 - **S6 and S7.** Run 8 (shuffled outcomes) vs the untrained model, key numbers, and the main setup vs run 8. Validation: run 8 worse than untrained (Brier +0.035), main setup better than run 8.
+- **S8.** Main setup vs gradient-boosted trees on the key numbers, both versions. Validation: AUC −0.042 (−0.071 to −0.015) against trees with the series, −0.033 (−0.057 to −0.010) against trees without; Brier within noise (`extra_analyses.md`).
 - Each run on its own vs the untrained model, Brier by series, and threshold-ladder consistency.
 
 ## Known differences from validation
@@ -63,6 +64,8 @@ So far the only things looked at in the test split are its size, dates, series a
 ## Changes made before scoring
 
 - **29 October 2026, after run 10 finished on validation and before any test scoring.** P2 and S3 now use all three std-scaling-on seeds; the first version had only runs 3 and 9, because run 10 was still training. P3's second test changed. The first version asked that each run's 4-answer average fall on the rule's side of 0.5 on at least 95% of all questions, a threshold set from runs 3 and 9 (99.5% and 99.3%). Run 10 meets it on only 92.4% of validation questions: its single answers are still 0 or 1, but on a few questions its 4 answers disagree, so the average lands between 0 and 1. A threshold that validation already contradicts would not test anything. So P3 now counts single answers that are exactly the rule's 0 or 1, on the questions that have a rule. On validation, this measure separates the collapsed runs (94.6% to 99.9%) from the std-off runs (under 1%).
+
+- **29 October 2026, later the same day, still before any test scoring.** Added the gradient-boosted-tree baselines and S8, after reviewer feedback asked for a stronger simple competitor. They were fitted and scored on validation only.
 
 ## What will not change after scoring
 

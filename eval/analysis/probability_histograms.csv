@@ -1,0 +1,161 @@
+group,answers,bin_low,share
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.0,0.0982
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.05,0.0491
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.1,0.0315
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.15,0.0168
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.2,0.022
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.25,0.0505
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.3,0.0425
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.35,0.0161
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.4,0.0564
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.45,0.0264
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.5,0.0645
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.55,0.1018
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.6,0.0425
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.65,0.0777
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.7,0.0286
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.75,0.0498
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.8,0.0806
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.85,0.0198
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.9,0.052
+"Key numbers, std scaling on (runs 3, 9, 10)",first,0.95,0.0733
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.0,0.4691
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.05,0.0013
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.1,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.15,0.002
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.2,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.25,0.0013
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.3,0.002
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.35,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.4,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.45,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.5,0.002
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.55,0.0013
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.6,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.65,0.0033
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.7,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.75,0.0007
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.8,0.0013
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.85,0.0
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.9,0.0013
+"Key numbers, std scaling on (runs 3, 9, 10)",last,0.95,0.5147
+"Key numbers, std scaling off (runs 4-6)",first,0.0,0.0837
+"Key numbers, std scaling off (runs 4-6)",first,0.05,0.0543
+"Key numbers, std scaling off (runs 4-6)",first,0.1,0.0323
+"Key numbers, std scaling off (runs 4-6)",first,0.15,0.0162
+"Key numbers, std scaling off (runs 4-6)",first,0.2,0.0279
+"Key numbers, std scaling off (runs 4-6)",first,0.25,0.0441
+"Key numbers, std scaling off (runs 4-6)",first,0.3,0.0455
+"Key numbers, std scaling off (runs 4-6)",first,0.35,0.0184
+"Key numbers, std scaling off (runs 4-6)",first,0.4,0.0521
+"Key numbers, std scaling off (runs 4-6)",first,0.45,0.033
+"Key numbers, std scaling off (runs 4-6)",first,0.5,0.0602
+"Key numbers, std scaling off (runs 4-6)",first,0.55,0.0999
+"Key numbers, std scaling off (runs 4-6)",first,0.6,0.0455
+"Key numbers, std scaling off (runs 4-6)",first,0.65,0.0771
+"Key numbers, std scaling off (runs 4-6)",first,0.7,0.0228
+"Key numbers, std scaling off (runs 4-6)",first,0.75,0.0338
+"Key numbers, std scaling off (runs 4-6)",first,0.8,0.0705
+"Key numbers, std scaling off (runs 4-6)",first,0.85,0.036
+"Key numbers, std scaling off (runs 4-6)",first,0.9,0.0661
+"Key numbers, std scaling off (runs 4-6)",first,0.95,0.0808
+"Key numbers, std scaling off (runs 4-6)",last,0.0,0.0293
+"Key numbers, std scaling off (runs 4-6)",last,0.05,0.0821
+"Key numbers, std scaling off (runs 4-6)",last,0.1,0.0345
+"Key numbers, std scaling off (runs 4-6)",last,0.15,0.0261
+"Key numbers, std scaling off (runs 4-6)",last,0.2,0.0358
+"Key numbers, std scaling off (runs 4-6)",last,0.25,0.0671
+"Key numbers, std scaling off (runs 4-6)",last,0.3,0.043
+"Key numbers, std scaling off (runs 4-6)",last,0.35,0.0163
+"Key numbers, std scaling off (runs 4-6)",last,0.4,0.0521
+"Key numbers, std scaling off (runs 4-6)",last,0.45,0.0313
+"Key numbers, std scaling off (runs 4-6)",last,0.5,0.0313
+"Key numbers, std scaling off (runs 4-6)",last,0.55,0.099
+"Key numbers, std scaling off (runs 4-6)",last,0.6,0.0547
+"Key numbers, std scaling off (runs 4-6)",last,0.65,0.0456
+"Key numbers, std scaling off (runs 4-6)",last,0.7,0.0384
+"Key numbers, std scaling off (runs 4-6)",last,0.75,0.0254
+"Key numbers, std scaling off (runs 4-6)",last,0.8,0.0958
+"Key numbers, std scaling off (runs 4-6)",last,0.85,0.0423
+"Key numbers, std scaling off (runs 4-6)",last,0.9,0.0997
+"Key numbers, std scaling off (runs 4-6)",last,0.95,0.0502
+"Key numbers, shuffled outcomes (run 8)",first,0.0,0.0741
+"Key numbers, shuffled outcomes (run 8)",first,0.05,0.0305
+"Key numbers, shuffled outcomes (run 8)",first,0.1,0.0283
+"Key numbers, shuffled outcomes (run 8)",first,0.15,0.0261
+"Key numbers, shuffled outcomes (run 8)",first,0.2,0.0458
+"Key numbers, shuffled outcomes (run 8)",first,0.25,0.0523
+"Key numbers, shuffled outcomes (run 8)",first,0.3,0.0218
+"Key numbers, shuffled outcomes (run 8)",first,0.35,0.0087
+"Key numbers, shuffled outcomes (run 8)",first,0.4,0.0349
+"Key numbers, shuffled outcomes (run 8)",first,0.45,0.0458
+"Key numbers, shuffled outcomes (run 8)",first,0.5,0.0675
+"Key numbers, shuffled outcomes (run 8)",first,0.55,0.1111
+"Key numbers, shuffled outcomes (run 8)",first,0.6,0.0414
+"Key numbers, shuffled outcomes (run 8)",first,0.65,0.0893
+"Key numbers, shuffled outcomes (run 8)",first,0.7,0.0327
+"Key numbers, shuffled outcomes (run 8)",first,0.75,0.0414
+"Key numbers, shuffled outcomes (run 8)",first,0.8,0.0806
+"Key numbers, shuffled outcomes (run 8)",first,0.85,0.0349
+"Key numbers, shuffled outcomes (run 8)",first,0.9,0.061
+"Key numbers, shuffled outcomes (run 8)",first,0.95,0.0719
+"Key numbers, shuffled outcomes (run 8)",last,0.0,0.002
+"Key numbers, shuffled outcomes (run 8)",last,0.05,0.0
+"Key numbers, shuffled outcomes (run 8)",last,0.1,0.002
+"Key numbers, shuffled outcomes (run 8)",last,0.15,0.002
+"Key numbers, shuffled outcomes (run 8)",last,0.2,0.0078
+"Key numbers, shuffled outcomes (run 8)",last,0.25,0.0157
+"Key numbers, shuffled outcomes (run 8)",last,0.3,0.0275
+"Key numbers, shuffled outcomes (run 8)",last,0.35,0.0118
+"Key numbers, shuffled outcomes (run 8)",last,0.4,0.0843
+"Key numbers, shuffled outcomes (run 8)",last,0.45,0.0784
+"Key numbers, shuffled outcomes (run 8)",last,0.5,0.1216
+"Key numbers, shuffled outcomes (run 8)",last,0.55,0.3549
+"Key numbers, shuffled outcomes (run 8)",last,0.6,0.1569
+"Key numbers, shuffled outcomes (run 8)",last,0.65,0.0863
+"Key numbers, shuffled outcomes (run 8)",last,0.7,0.0255
+"Key numbers, shuffled outcomes (run 8)",last,0.75,0.0059
+"Key numbers, shuffled outcomes (run 8)",last,0.8,0.0118
+"Key numbers, shuffled outcomes (run 8)",last,0.85,0.0039
+"Key numbers, shuffled outcomes (run 8)",last,0.9,0.002
+"Key numbers, shuffled outcomes (run 8)",last,0.95,0.0
+"Plain prompt, std scaling off (run 7)",first,0.0,0.0494
+"Plain prompt, std scaling off (run 7)",first,0.05,0.0556
+"Plain prompt, std scaling off (run 7)",first,0.1,0.0185
+"Plain prompt, std scaling off (run 7)",first,0.15,0.0041
+"Plain prompt, std scaling off (run 7)",first,0.2,0.0185
+"Plain prompt, std scaling off (run 7)",first,0.25,0.0329
+"Plain prompt, std scaling off (run 7)",first,0.3,0.0473
+"Plain prompt, std scaling off (run 7)",first,0.35,0.0165
+"Plain prompt, std scaling off (run 7)",first,0.4,0.0658
+"Plain prompt, std scaling off (run 7)",first,0.45,0.0473
+"Plain prompt, std scaling off (run 7)",first,0.5,0.0535
+"Plain prompt, std scaling off (run 7)",first,0.55,0.1893
+"Plain prompt, std scaling off (run 7)",first,0.6,0.0535
+"Plain prompt, std scaling off (run 7)",first,0.65,0.0967
+"Plain prompt, std scaling off (run 7)",first,0.7,0.0453
+"Plain prompt, std scaling off (run 7)",first,0.75,0.0309
+"Plain prompt, std scaling off (run 7)",first,0.8,0.1111
+"Plain prompt, std scaling off (run 7)",first,0.85,0.0103
+"Plain prompt, std scaling off (run 7)",first,0.9,0.0412
+"Plain prompt, std scaling off (run 7)",first,0.95,0.0123
+"Plain prompt, std scaling off (run 7)",last,0.0,0.002
+"Plain prompt, std scaling off (run 7)",last,0.05,0.0
+"Plain prompt, std scaling off (run 7)",last,0.1,0.0039
+"Plain prompt, std scaling off (run 7)",last,0.15,0.0039
+"Plain prompt, std scaling off (run 7)",last,0.2,0.002
+"Plain prompt, std scaling off (run 7)",last,0.25,0.0196
+"Plain prompt, std scaling off (run 7)",last,0.3,0.0196
+"Plain prompt, std scaling off (run 7)",last,0.35,0.0059
+"Plain prompt, std scaling off (run 7)",last,0.4,0.0528
+"Plain prompt, std scaling off (run 7)",last,0.45,0.0372
+"Plain prompt, std scaling off (run 7)",last,0.5,0.1252
+"Plain prompt, std scaling off (run 7)",last,0.55,0.3229
+"Plain prompt, std scaling off (run 7)",last,0.6,0.2368
+"Plain prompt, std scaling off (run 7)",last,0.65,0.1037
+"Plain prompt, std scaling off (run 7)",last,0.7,0.0235
+"Plain prompt, std scaling off (run 7)",last,0.75,0.0117
+"Plain prompt, std scaling off (run 7)",last,0.8,0.0235
+"Plain prompt, std scaling off (run 7)",last,0.85,0.002
+"Plain prompt, std scaling off (run 7)",last,0.9,0.0039
+"Plain prompt, std scaling off (run 7)",last,0.95,0.0
