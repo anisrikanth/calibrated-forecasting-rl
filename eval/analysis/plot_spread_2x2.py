@@ -1,13 +1,13 @@
 """The 2 x 2 in one figure: how spread out the model's stated probabilities are during training.
 
-Left: plain prompt (run 1 std scaling on, run 7 off). Right: key numbers (run 3 on, runs 4-6 off).
+Left: plain prompt (run 1 std scaling on, run 7 off). Right: key numbers (runs 3, 9, 10 on; runs 4-6 off).
 Spread = standard deviation of the stated probabilities over a rolling window of 512 training
 answers. A model that answers only 0 or 1 on balanced questions has spread 0.5; one that hedges
 toward a single number has spread near 0.
 
-Usage: python eval/analysis/plot_spread_2x2.py <run1> <run7> <run3> <run4> <run5> <run6> [<run8>] <out_dir>
-(each argument is that run's train_answers CSV; run 8, the shuffled-outcome control, is optional). Writes eval/figures/spread_2x2.png and
-<out_dir>/spread_2x2.csv.
+Usage: python eval/analysis/plot_spread_2x2.py <run1> <run7> <run3> <run4> <run5> <run6> [<run8> [<run9> <run10>]] <out_dir>
+(each argument is that run's train_answers CSV; run 8, the shuffled-outcome control, and runs 9-10, two more
+seeds of run 3, are optional). Writes eval/figures/spread_2x2.png and <out_dir>/spread_2x2.csv.
 """
 import os
 import sys
@@ -34,7 +34,8 @@ def rolling_sd(path):
 
 
 def main(paths, out_dir):
-    names = ["Run 1", "Run 7", "Run 3", "Run 4", "Run 5", "Run 6", "Run 8"][:len(paths)]
+    names = ["Run 1", "Run 7", "Run 3", "Run 4", "Run 5", "Run 6", "Run 8", "Run 9", "Run 10"][:len(paths)]
+    seeds_on = "Run 9" in names
     data = pd.concat([rolling_sd(p).assign(run=n) for p, n in zip(paths, names)], ignore_index=True)
     data.to_csv(os.path.join(out_dir, "spread_2x2.csv"), index=False)
 
@@ -43,9 +44,10 @@ def main(paths, out_dir):
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), facecolor=SURFACE, sharey=True)
     panels = [("Plain prompt (recent results only)", [("Run 1", ON, "Run 1: std scaling on"),
                                                       ("Run 7", OFF, "Run 7: std scaling off")]),
-              ("Key numbers in the prompt", [("Run 3", ON, "Run 3: std scaling on"),
-                                             ("Run 4", OFF, "Runs 4-6: std scaling off, 3 seeds"),
-                                             ("Run 5", OFF, None), ("Run 6", OFF, None)]
+              ("Key numbers in the prompt", [("Run 3", ON, "Runs 3, 9, 10: std scaling on, 3 seeds" if seeds_on else
+                                              "Run 3: std scaling on")]
+               + ([("Run 9", ON, None), ("Run 10", ON, None)] if seeds_on else [])
+               + [("Run 4", OFF, "Runs 4-6: std scaling off, 3 seeds"), ("Run 5", OFF, None), ("Run 6", OFF, None)]
                + ([("Run 8", CONTROL, "Run 8: std scaling off, shuffled outcomes")] if "Run 8" in names else []))]
     for ax, (title, lines) in zip(axes, panels):
         ax.set_facecolor(SURFACE)

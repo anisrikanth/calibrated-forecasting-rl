@@ -10,6 +10,10 @@ Results so far:
 - `rl_run4.md`: run 4, GRPO without std scaling: no collapse, better ordering at unchanged calibration
 - `rl_runs5to7.md`: three seeds of the main setup and the full 2 × 2 (prompt × std scaling)
 - `rl_run8.md`: shuffled-outcome control: without a real signal, RL makes the model worse and hedges
+- `prompt_ablation.md`: which lines of the key numbers raise the untrained model's discrimination
+- `rl_runs9_10.md`: two more seeds of run 3: with std scaling on, all three seeds collapse onto the latest-result rule
+- `test_plan.md`: the comparisons fixed in advance for the one evaluation on the test split
+- `answers/`: each model's validation answers (probability and a fingerprint of the text), used to check saved adapters load correctly
 - `analysis/`: the scripts and tables behind them; `figures/`: the plots
 
 Baselines compared in every run: the market price at question time, each series' base rate, always 0.5, and the model with and without context (first answer, and the average of 4).

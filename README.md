@@ -25,7 +25,7 @@ Training a small open language model with reinforcement learning (GRPO) to give 
 - [x] Phase 0: setup and GRPO smoke test on Kaggle (20 steps, plus checkpoint resume)
 - [x] Phase 1: Kalshi data pipeline (14,662 markets, 10 series), context snapshots, leakage audit, date-based splits
 - [x] Phase 2: forecasting environment, baselines and leak probe (`eval/baselines.md`)
-- [ ] Phase 3: GRPO training and reward-hacking log. Runs 1-7 done (`eval/rl_run1.md`, `eval/rl_run2_run3.md`, `eval/rl_run4.md`, `eval/rl_runs5to7.md`): the full prompt × std-scaling 2 × 2 and three seeds of the main setup; 5 entries in `writeup/hacks.md`; shuffled-outcome control (run 8, `eval/rl_run8.md`); prompt ablation (`eval/prompt_ablation.md`); a second seed of the collapse (run 9) reproduces it; next: run 10, then the test split
+- [x] Phase 3: GRPO training and reward-hacking log. Runs 1-10 done (`eval/rl_run1.md`, `eval/rl_run2_run3.md`, `eval/rl_run4.md`, `eval/rl_runs5to7.md`): the full prompt × std-scaling 2 × 2 and three seeds of the main setup; 5 entries in `writeup/hacks.md`; shuffled-outcome control (run 8, `eval/rl_run8.md`); prompt ablation (`eval/prompt_ablation.md`); two more seeds of the collapse (runs 9 and 10, `eval/rl_runs9_10.md`) reproduce it
 - [ ] Phase 4: one evaluation on the untouched test split, with the comparisons fixed in advance in `eval/test_plan.md` (`notebooks/phase4_test_eval.ipynb`)
 - [ ] Phase 5: write-up
 

@@ -1,0 +1,14 @@
+{
+ "questions": 25,
+ "by_series": {
+  "KXPAYROLLS": 10,
+  "KXCPICOREYOY": 5,
+  "KXCPIYOY": 4,
+  "KXFED": 3,
+  "KXU3": 2,
+  "KXCPI": 1
+ },
+ "run10_side_correct": 0.56,
+ "rule_side_correct": 0.44,
+ "share_with_mixed_answers": 0.72
+}

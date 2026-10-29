@@ -24,6 +24,7 @@ One entry per issue: what happened, how it was spotted, the fix, and the before/
 - **Why it likely happens:** GRPO divides each answer's advantage by the spread of rewards in its group. With a proper-scoring reward this favors confident answers and feeds on itself ([Bereket & Leskovec 2025](https://arxiv.org/pdf/2508.11800)); [Turtel et al. 2025](https://arxiv.org/html/2505.17989v4) saw 39% extreme forecasts with plain GRPO. TRL 0.22.2 does this by default (`scale_rewards="group"`).
 - **Fix:** turn the scaling off (`scale_rewards="none"`, subtract the group mean only).
 - **Effect (run 4, one seed):** on run 3's settings, which collapsed, turning it off kept 84% of econ forecasts away from 0 and 1 (run 3: 1%), kept calibration error at 0.06 (run 3: 0.22), and improved the Brier score to 0.169 (run 3: 0.223) and AUC to 0.83 (run 3: 0.77). See `eval/rl_run4.md`.
+- **Replicated (three seeds per setting):** runs 4 to 6 (std off) against runs 3, 9 and 10 (std on), each group averaged on the validation econ questions: Brier −0.048 (−0.099 to −0.003), log loss −0.468, calibration error −0.148, AUC +0.045 (+0.018 to +0.077). See `eval/rl_runs5to7.md` and `eval/rl_runs9_10.md`.
 
 ## 4. In-training numbers overstate what was learned
 
@@ -39,4 +40,10 @@ One entry per issue: what happened, how it was spotted, the fix, and the before/
 - **Why:** the key-numbers block made one cue easy to read ("latest result: 0.4 above the threshold"). Answers that follow it score better on average, and GRPO's std scaling (entry 3) pushes them to certainty. The certainty itself is not what the reward wants: on the training questions the rule stated at its hit rates (84% / 15%) earns a higher average Brier reward (0.870) than the 0/1 version (0.847). The rule is right for slow series and badly wrong for noisy ones (payrolls).
 - **How to catch it:** compare the trained model with simple rules built from the prompt (here, persistence of the latest result). The gap metric rose sharply (0.22 to 0.54) without any AUC gain, so gap rewards sharpening and is not a discrimination measure; use AUC.
 - **Fix:** std scaling off (entry 3). Run 4 did not collapse: its forecasts agree with the latest-result rule on 93% of threshold questions rather than 100%, and its AUC beats the rule's by 0.054 (interval +0.010 to +0.101).
+- **Replicated:** runs 9 and 10 repeat run 3 with training seeds 1 and 2, and collapse the same way.
+  - 98.8% and 99.1% of their answers are exactly 0 or 1.
+  - 98.7% and 94.6% of their answers to threshold questions are exactly the rule's 0 or 1.
+  - The share of near-certain training answers passes 90% at step 124 and step 136 (run 3: 124).
+  - Averaged over the three seeds, they score the same as the rule: Brier +0.001 (−0.017 to +0.017).
+  - Unlike run 3, they kept short reasoning (median 73 and 37 tokens), so shrinking the answers is not part of the collapse; the 0/1 answers are. See `eval/rl_runs9_10.md`.
 

@@ -956,14 +956,19 @@ comparisons.to_csv(f"{OUT_DIR}/test_comparisons.csv", index=False)
 print(f"({(time.time() - t0) / 60:.1f} min)")
 show = comparisons[comparisons["metric"].isin(["brier", "log_loss", "ece", "auc"])]
 show.round(4)'''),
-        md("P3: do the std-scaling-on runs collapse onto the latest-result rule again?"),
-        code('''collapse = []
+        md("P3: do the std-scaling-on runs collapse onto the latest-result rule again? `answers_equal_to_rule` is the share of single answers, on the questions with a numeric threshold (Fed decisions have no rule), that are exactly the rule's 0 or 1."),
+        code('''from env.baselines import latest_rule_column
+rule_q = g[latest_rule_column(g).notna()]
+collapse = []
 for l in [x for x in COLLAPSE + MAIN if x in MODELS]:
     a = answers[(answers["condition"] == l) & answers["market_ticker"].isin(g["market_ticker"])]
-    p = g[f"{l}_mean4"]
+    p = rule_q[f"{l}_mean4"]
+    ar = a.merge(rule_q[["market_ticker", "latest_rule"]], on="market_ticker")
     collapse.append({"model": l, "answers_at_0_or_1": round(float(a["prob"].isin([0.0, 1.0]).mean()), 3),
-                     "same_side_as_latest_rule": round(float(((p >= 0.5) == (g["latest_rule"] >= 0.5)).mean()), 3),
-                     "mean_abs_diff_from_rule": round(float((p - g["latest_rule"]).abs().mean()), 3)})
+                     "answers_equal_to_rule": round(float((ar["prob"] == ar["latest_rule"]).mean()), 3),
+                     "same_side_as_latest_rule": round(float(((p >= 0.5) == (rule_q["latest_rule"] >= 0.5)).mean()), 3),
+                     "mean_abs_diff_from_rule": round(float((p - rule_q["latest_rule"]).abs().mean()), 3),
+                     "threshold_questions": len(rule_q)})
 collapse = pd.DataFrame(collapse)
 collapse.to_csv(f"{OUT_DIR}/test_collapse.csv", index=False)
 collapse'''),
