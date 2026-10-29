@@ -727,6 +727,28 @@ print("=" * 25, "COPY TO HERE", "=" * 27)'''),
     return nb
 
 
+def _guard_after_check(cells):
+    """Test notebook: after the loading check, a CHECK_ONLY setting skips everything that touches the
+    test questions, so a short GPU session can confirm the adapters load before the full run."""
+    i = next(k for k, c in enumerate(cells) if c.cell_type == "code" and "checks = []" in c.source)
+    stop = code('''if CHECK_ONLY:
+    print("CHECK_ONLY = True: stopped after the loading check; no test question was scored.")
+    print("=" * 25, "COPY FROM HERE", "=" * 25)
+    print(f"Run {RUN_NAME} (check only) | repo {COMMIT} | {len(check_df)} validation questions per model")
+    print(check_table.to_string(index=False))
+    print("=" * 25, "COPY TO HERE", "=" * 27)''')
+    out = cells[:i + 1] + [stop]
+    for c in cells[i + 1:]:
+        if c.cell_type == "code":
+            lines = c.source.splitlines()
+            last = lines[-1]
+            if last and not last.startswith((" ", "print", "for ", "if ", "display")) and "=" not in last:
+                lines[-1] = f"display({last})"          # a bare expression would not show inside the if
+            c = code("if not CHECK_ONLY:\n" + "\n".join("    " + l if l else l for l in lines))
+        out.append(c)
+    return out
+
+
 def test_eval() -> nbf.NotebookNode:
     cells = [
         md("""# Phase 4: one evaluation on the untouched test split
@@ -741,6 +763,7 @@ No training here. It loads each run's saved LoRA adapter from that run's noteboo
 3. **Check the inputs first, without a GPU:** with **Accelerator → None**, run the code under sections 1 and 2 by hand. Section 2 lists every adapter it finds and stops with the names of any that are missing. This uses no GPU quota.
    - If Kaggle won't attach more than one version of the same notebook: open each run's version, go to **Output**, download its `lora_<run name>` folder (two files), put all the folders into one new dataset, and attach that instead. Section 2 finds the adapters wherever they are in the inputs.
 4. Then **Accelerator → GPU T4 x2**, **Internet → On**, and **Save Version → Save & Run All**. About 3 hours (about 12 minutes per model on the test set, plus the checks).
+   - To test the setup on a short GPU session first, set `CHECK_ONLY = True`: it stops after the loading check (about 40 minutes) without scoring any test question. Set it back to `False` for the real run.
 
 Answers are saved after every model, so a session that ends early still keeps the finished ones. At the end, copy the block between **COPY FROM HERE** and **COPY TO HERE** back to Claude and download `test_answers.csv`, `test_check.csv` and `test_comparisons.csv`."""),
         md("## 1. Settings"),
@@ -767,6 +790,7 @@ COLLAPSE = ["run3", "run9", "run10"]
 
 CHECK_QUESTIONS = 80              # validation questions re-scored per model before the test set (0 = skip)
 STOP_IF_CHECKS_FAIL = True        # stop before the test set if no adapter reproduces its stored answers
+CHECK_ONLY = False                # True = run only the loading check (about 40 minutes), no test questions
 
 EVAL_SAMPLES = 4
 EVAL_TEMPERATURE = 0.7
@@ -999,6 +1023,7 @@ print()
 print(ladder.round(3).to_string(index=False))
 print("=" * 25, "COPY TO HERE", "=" * 27)'''),
     ]
+    cells = _guard_after_check(cells)
     nb = nbf.v4.new_notebook()
     nb.cells = cells
     nb.metadata = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
