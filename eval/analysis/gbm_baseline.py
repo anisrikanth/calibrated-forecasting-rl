@@ -13,7 +13,11 @@ lowest log loss wins, then refitted on all training questions. Questions without
 (Fed decisions) get the series base rate, as for the logistic regression.
 
 Usage: python -I eval/analysis/gbm_baseline.py <repo_dir> <data_dir> <out_dir> [val|test]
-data_dir holds markets.csv (and, for val, the eval answer CSVs of runs 4-6 for the paired comparison).
+data_dir holds markets.csv and, for the paired comparison with runs 4-6 (S8 in eval/test_plan.md):
+- val: the eval answer CSVs of runs 4-6 (eval_answers_run4.csv, ...);
+- test: the test notebook's test_answers.csv, and its test_check.csv so that an adapter that failed the
+  loading check is left out, as the plan says. Test mode scores the test econ questions only (the weather
+  questions are the same in both modes and were scored with val).
 """
 import itertools
 import os
@@ -89,6 +93,8 @@ for name, with_series in (("gbm", False), ("gbm_series", True)):
     print(name, "chosen:", params)
 cv = pd.concat(cv_tables, ignore_index=True)
 ev = ev[ev["market_prob"].notna()].reset_index(drop=True)
+if SPLIT == "test":
+    ev = ev[ev["eval_set"] == "test_econ"].reset_index(drop=True)
 
 methods = ["market", "gbm_series", "gbm", "logistic", "recent_hits", "latest_rule", "base_rate"]
 answers = {}
@@ -98,6 +104,16 @@ if SPLIT == "val":
         if os.path.exists(path):
             ev = add_forecast_columns(ev, pd.read_csv(path), "trained", run)
             answers[run] = f"{run}_mean4"
+elif os.path.exists(os.path.join(DATA, "test_answers.csv")):
+    test_answers = pd.read_csv(os.path.join(DATA, "test_answers.csv"))
+    check_path = os.path.join(DATA, "test_check.csv")
+    check = pd.read_csv(check_path) if os.path.exists(check_path) else pd.DataFrame(columns=["model", "status"])
+    bad = set(check.loc[check["status"] == "MISMATCH", "model"])
+    for run in ("run4", "run5", "run6"):
+        if run in set(test_answers["condition"]) and run not in bad:
+            ev = add_forecast_columns(ev, test_answers, run, run)
+            answers[run] = f"{run}_mean4"
+    print("runs 4-6 in the comparison:", list(answers), "| left out (failed the loading check):", sorted(bad & {"run4", "run5", "run6"}))
 rows = []
 for es, g in ev.groupby("eval_set"):
     for m in methods + list(answers.values()):
@@ -111,11 +127,13 @@ for es, g in ev.groupby("eval_set"):
     for a, b in (("logistic", "gbm"), ("logistic", "gbm_series")):
         t = paired_bootstrap(g, a, b, n_boot=4000, seed=0, cluster="announcement").rename(columns={a: "a", b: "b"})
         boots.append(t.assign(eval_set=es, comparison=f"{b} vs {a}"))
-    if len(answers) == 3:
+    if answers:
         for ref in ("gbm", "gbm_series"):
             t = paired_bootstrap_groups(g, [ref], list(answers.values()), n_boot=4000, seed=0, cluster="announcement")
-            boots.append(t.assign(eval_set=es, comparison=f"runs 4-6 vs {ref}"))
-boot = pd.concat(boots, ignore_index=True)[["eval_set", "comparison", "metric", "a", "b", "change", "ci_low", "ci_high"]]
+            boots.append(t.assign(eval_set=es, comparison=f"runs 4-6 vs {ref}", models=len(answers)))
+boot = pd.concat(boots, ignore_index=True)
+boot = boot[[c for c in ["eval_set", "comparison", "models", "metric", "a", "b", "change", "ci_low", "ci_high",
+                         "b_min", "b_max"] if c in boot]]
 
 pd.set_option("display.width", 200)
 print(scores.round(4).to_string(index=False)); print()

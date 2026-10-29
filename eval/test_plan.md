@@ -1,8 +1,8 @@
 # Test-set plan, fixed before the test split is scored
 
-Written 28 October 2026 and amended three times on 29 October (see "Changes made before scoring"), all before any model has seen or been scored on the test split. It is committed to the repo before the test notebook (`notebooks/phase4_test_eval.ipynb`) runs; the notebook refuses to run without it and prints the repo commit, so the commit history shows the plan came first. Nothing below changes after the test results are in.
+Written 28 October 2026 and amended four times on 29 October (see "Changes made before scoring"), all before any model has seen or been scored on the test split. It is committed to the repo before the test notebook (`notebooks/phase4_test_eval.ipynb`) runs; the notebook refuses to run without it and prints the repo commit, so the commit history shows the plan came first. Nothing below changes after the test results are in.
 
-So far the only things looked at in the test split are its size, dates, series, announcement dates, question timing and yes-rate (below). No model, rule or baseline has been scored on it.
+So far the only things looked at in the test split are its size, dates, series, announcement dates, question timing and yes-rate (below). No model has been scored on it. (Correction, fourth change below: testing the code with made-up model answers computed the baselines on the test split as a side effect.)
 
 ## What is scored
 
@@ -43,7 +43,7 @@ So far the only things looked at in the test split are its size, dates, series, 
 - Validation, all three seeds of each, resampling announcements: log loss −0.468 (−0.741 to −0.236), calibration error −0.148 (−0.194 to −0.027), Brier −0.048 (−0.094 to −0.007), AUC +0.045 (+0.021 to +0.076).
 - Prediction: lower log loss and lower calibration error.
 
-**P3. The std-scaling-on runs collapse onto the latest-result rule again.** Measured on single answers to the questions with a numeric threshold (Fed decisions have no rule).
+**P3. The std-scaling-on runs collapse onto the latest-result rule again.** Measured on single answers: the share exactly 0 or 1 on all scored questions, and the share exactly the rule's 0 or 1 on the questions with a numeric threshold (Fed decisions have no rule).
 - Validation: 99.4%, 98.8% and 99.1% of answers (runs 3, 9, 10) are exactly 0 or 1, and 99.9%, 98.7% and 94.6% are exactly the rule's 0 or 1. For comparison, the std-off runs 4 to 6 have under 1% of answers at exactly 0 or 1.
 - Prediction: for each of runs 3, 9 and 10, at least 90% of answers exactly 0 or 1, and at least 90% exactly the rule's 0 or 1.
 
@@ -81,6 +81,14 @@ So far the only things looked at in the test split are its size, dates, series, 
   - P1's two conclusions are made explicit, as is the handling of adapters that fail the loading check.
 
   No prediction or threshold changed.
+
+- **29 October 2026, after a loading check and still before any test scoring.**
+  - A check-only run of the test notebook (`CHECK_ONLY = True`, repo commit `ba3e6ef`) loaded every adapter and re-answered 80 validation questions per model. All 11 models reproduced their stored answers ("match": 83% to 100% of answers word for word). It scored no test question; from the test split it printed only the counts above and the text of one test prompt.
+  - The reading rules above are now applied by a script, `eval/analysis/analyze_test.py`, which also computes the two descriptive checks (unreadable answers as 0.5, announcements weighted equally). `eval/analysis/gbm_baseline.py` now reads the test notebook's answers, so it can compute S8. Both scripts were tested on made-up model answers.
+  - Those tests, and earlier dry runs of the notebook, paired made-up model answers with the real baselines, so the baselines were computed on the test split as a side effect, and some of their scores were seen (the market price, the base rate, the logistic regression by series and the trees). No language model has been scored. The baselines have no settings left to choose, so this cannot change any result, but it corrects this plan's earlier statement that no baseline had been scored.
+  - P3's wording now matches how its first measure was computed on validation and in the notebook: the share of answers exactly 0 or 1 counts all scored questions; only the share equal to the rule is limited to questions with a threshold.
+
+  No prediction, threshold or procedure changed.
 
 ## What will not change after scoring
 
