@@ -52,7 +52,7 @@ The histograms show the endpoints of each pattern:
 
 **How the settings were chosen:**
 - A grid of 8 settings (tree depth 2 or 3, learning rate 0.03 or 0.1, 100 or 300 trees).
-- Picked by 5-fold cross-validation on the training questions, keeping each release in one fold, by lowest log loss.
+- Picked by 5-fold cross-validation on the training questions, keeping each announcement (all series released together) in one fold, by lowest log loss. An earlier version kept only each release in one fold; it chose the same settings.
 - Both versions chose depth 3, learning rate 0.03 and 100 trees (`analysis/gbm_cv.csv`).
 - The validation questions played no part in choosing.
 
@@ -66,17 +66,17 @@ The histograms show the endpoints of each pattern:
 | Runs 4-6 (RL, std off, 3 seeds) | 0.169 to 0.171 | 0.519 to 0.527 | 0.054 to 0.088 | 0.820 to 0.832 |
 | Untrained, key numbers | 0.201 | 0.594 | 0.060 | 0.757 |
 
-| Comparison (validation econ, 95% intervals) | Brier change | AUC change |
+| Comparison (validation econ, 95% intervals resampling announcements) | Brier change | AUC change |
 | --- | --- | --- |
-| Runs 4-6 vs trees, key numbers + series | +0.019 (−0.007 to +0.045) | **−0.042** (−0.071 to −0.015) |
-| Runs 4-6 vs trees, key numbers | +0.012 (−0.021 to +0.041) | **−0.033** (−0.057 to −0.010) |
-| Trees, key numbers + series vs logistic regression | −0.012 (−0.037 to +0.009) | +0.014 (−0.015 to +0.048) |
+| Runs 4-6 vs trees, key numbers + series | +0.019 (−0.006 to +0.049) | **−0.042** (−0.069 to −0.018) |
+| Runs 4-6 vs trees, key numbers | +0.012 (−0.018 to +0.044) | **−0.033** (−0.053 to −0.013) |
+| Trees, key numbers + series vs logistic regression | −0.012 (−0.035 to +0.005) | +0.014 (−0.016 to +0.051) |
 
 Bold: interval excludes 0. `analysis/gbm_val_scores.csv`, `analysis/gbm_val_paired_bootstrap.csv`.
 
 - **The trees are the best method short of the market.**
 - **The RL model ranks questions clearly worse than the trees.** AUC is 0.03 to 0.04 lower, and both intervals exclude 0. Its Brier score is within noise of theirs.
-- **So, honestly put:** RL brought the 3B model up to a logistic regression on the same evidence, not to the best simple model. The trees improve on the logistic regression only slightly (intervals include 0).
+- **So:** the trained models don't outperform a logistic regression on the same evidence (the difference is not resolved either way), and they trail the trees. The trees improve on the logistic regression only slightly (intervals include 0).
 - **On weather, nothing beats the base rate.** Brier: trees 0.194 to 0.197, logistic 0.200, base rate 0.139.
 
 These baselines are added to the test plan before the test split is scored (`test_plan.md`, S8).

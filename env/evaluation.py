@@ -53,12 +53,22 @@ def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
     out = pd.concat([val.assign(eval_set=f"{econ_split}_econ"), weather.assign(eval_set="heldout_weather")],
                     ignore_index=True)
     fallback = train["outcome"].mean() if len(train) else 0.5
+    out["announcement"] = announcement_ids(out)
     out["base_rate"] = out["series_ticker"].map(base_rates).fillna(fallback)
     out["always_0.5"] = 0.5
     out["market"] = out["market_prob"]
     hits = pd.Series([recent_hit_rate(r) for r in out.to_dict("records")], index=out.index, dtype=float)
     out["recent_hits"] = hits.fillna(out["base_rate"])
     return add_rule_baselines(out, train, out["base_rate"])
+
+
+def announcement_ids(df: pd.DataFrame) -> pd.Series:
+    """One id per public announcement: the release date in US Eastern time. CPI's four series come out
+    in one release, payrolls and unemployment share the jobs report, and the Fed rate and Fed decision
+    share a meeting, so their questions resolve together and are resampled together. Weather questions
+    are grouped by day the same way (both cities' brackets for one date)."""
+    day = df["close_dt"].dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
+    return df["group"].fillna("econ").astype(str) + ":" + day if "group" in df else day
 
 
 def render_prompt(tokenizer: Any, row: dict, include_context: bool = True, key_numbers: bool = False,
@@ -109,8 +119,8 @@ def reproduction_check(new: pd.DataFrame, stored: pd.DataFrame) -> dict:
 
 
 def add_forecast_columns(eval_df: pd.DataFrame, answers: pd.DataFrame, condition: str, prefix: str) -> pd.DataFrame:
-    """Adds `<prefix>_single` (first answer) and `<prefix>_mean4` (average of readable answers).
-    Unreadable or missing answers count as 0.5."""
+    """Adds `<prefix>_single` (first answer) and `<prefix>_mean4` (the average of the question's
+    readable answers). An unreadable first answer, or a question with no readable answer, counts as 0.5."""
     a = answers[answers["condition"] == condition]
     first = a[a["sample"] == 0].set_index("market_ticker")["prob"]
     mean = a.groupby("market_ticker")["prob"].mean()
@@ -201,15 +211,16 @@ HIGHER_IS_BETTER = {"auc", "gap"}
 
 
 def paired_bootstrap(g: pd.DataFrame, a: str, b: str, n_boot: int = 4000, seed: int = 0,
-                     stats: dict = None) -> pd.DataFrame:
+                     stats: dict = None, cluster: str = "event_ticker") -> pd.DataFrame:
     """Change from method `a` to method `b` on the same questions, with a 95% interval from
     resampling whole events (a weather day, or one release's ladder of thresholds) with replacement.
     Questions in one event move together, so resampling single questions would make the interval
-    too narrow. `share_better` = share of draws where b beats a (mean_p: share where b is lower)."""
+    too narrow. `cluster` names the resampling unit ("announcement" groups the series released together).
+    `share_better` = share of draws where b beats a (mean_p: share where b is lower)."""
     stats = stats or BOOTSTRAP_STATS
     rng = np.random.default_rng(seed)
     g = g.reset_index(drop=True)
-    ev = g["event_ticker"].to_numpy()
+    ev = g[cluster].to_numpy()
     events = pd.unique(ev)
     idx = {e: np.flatnonzero(ev == e) for e in events}
     y, pa, pb = g["outcome"].to_numpy(), g[a].to_numpy(dtype=float), g[b].to_numpy(dtype=float)
@@ -229,15 +240,15 @@ def paired_bootstrap(g: pd.DataFrame, a: str, b: str, n_boot: int = 4000, seed: 
 
 
 def paired_bootstrap_groups(g: pd.DataFrame, a_cols: Sequence[str], b_cols: Sequence[str], n_boot: int = 4000,
-                            seed: int = 0, stats: dict = None) -> pd.DataFrame:
+                            seed: int = 0, stats: dict = None, cluster: str = "event_ticker") -> pd.DataFrame:
     """Like paired_bootstrap, for groups of forecasts (e.g. three training seeds): change = average
     over b_cols of each metric minus the average over a_cols, with every draw resampling the same
     whole events for all columns. The interval covers question sampling, not seed variation;
-    b_min / b_max give the spread across b_cols."""
+    b_min / b_max give the spread across b_cols. `cluster` as in paired_bootstrap."""
     stats = stats or BOOTSTRAP_STATS
     rng = np.random.default_rng(seed)
     g = g.reset_index(drop=True)
-    ev = g["event_ticker"].to_numpy()
+    ev = g[cluster].to_numpy()
     events = pd.unique(ev)
     idx = {e: np.flatnonzero(ev == e) for e in events}
     y = g["outcome"].to_numpy()
@@ -265,12 +276,13 @@ def paired_bootstrap_groups(g: pd.DataFrame, a_cols: Sequence[str], b_cols: Sequ
     return pd.DataFrame(rows)
 
 
-def paired_bootstrap_table(eval_df: pd.DataFrame, a: str, b: str, n_boot: int = 4000, seed: int = 0) -> pd.DataFrame:
+def paired_bootstrap_table(eval_df: pd.DataFrame, a: str, b: str, n_boot: int = 4000, seed: int = 0,
+                           cluster: str = "event_ticker") -> pd.DataFrame:
     """paired_bootstrap for each eval set, on the scored questions."""
     out = []
     for eval_set, g in scored_subset(eval_df).groupby("eval_set"):
-        t = paired_bootstrap(g, a, b, n_boot=n_boot, seed=seed)
+        t = paired_bootstrap(g, a, b, n_boot=n_boot, seed=seed, cluster=cluster)
         t.insert(0, "eval_set", eval_set)
-        t["events"] = g["event_ticker"].nunique()
+        t["events"] = g[cluster].nunique()
         out.append(t)
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame()

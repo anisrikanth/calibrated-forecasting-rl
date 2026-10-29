@@ -6,17 +6,17 @@
 
 1. **Evidence or level?** With the evidence held fixed, does proper-score RL teach a small model to use that evidence, or does it only move the level and spread of its probabilities?
 2. **The optimizer.** What does GRPO's division of advantages by the group's reward standard deviation ("std scaling", TRL's default) do with a proper-scoring-rule reward?
-3. **The ceiling.** How far does the trained model get against simple models on the same evidence (a counting rule, a logistic regression, gradient-boosted trees), and against the market price?
+3. **Simple models.** How does the trained model compare with simple models on the same evidence (a counting rule, a logistic regression, gradient-boosted trees), and with the market price?
 4. **Transfer.** Does anything carry over to a domain it never trained on (daily temperature markets)?
 5. **Reward hacking.** What shortcuts appear during training, and what measurements catch them?
 
-> **Preliminary findings** (validation split: 410 questions, 36 releases; the test split is scored once, against comparisons fixed in advance in [`eval/test_plan.md`](eval/test_plan.md))
+> **Preliminary findings** (validation split: 410 questions, 13 announcements; intervals resample whole announcements; the test split is scored once, against comparisons fixed in advance in [`eval/test_plan.md`](eval/test_plan.md))
 >
-> - **The untrained model can't read its evidence.** It scores AUC 0.52, while counting how many recent results would have resolved YES reaches 0.85. A deterministic "key numbers" block that spells out the comparison lifts it to 0.76 with no training. A prompt ablation traces the gain to three lines ([`eval/prompt_ablation.md`](eval/prompt_ablation.md)).
-> - **RL helps only with legible evidence and std scaling off.** Over three seeds: Brier −0.031 (95% interval −0.049 to −0.013), AUC +0.070 (+0.029 to +0.115), calibration unchanged. With outcomes shuffled, the same setup gets worse ([`eval/rl_runs5to7.md`](eval/rl_runs5to7.md), [`eval/rl_run8.md`](eval/rl_run8.md)).
+> - **The plain prompt elicits little discrimination.** The untrained model scores AUC 0.52, while counting how many recent results would have resolved YES reaches 0.85. A deterministic "key numbers" block that spells out the comparison lifts it to 0.76 with no training. A prompt ablation traces most of the gain to restating the YES condition and the count ([`eval/prompt_ablation.md`](eval/prompt_ablation.md)).
+> - **Among the configurations tested, only the key-numbers prompt with std scaling off improved both Brier and AUC** (one pass of training). Over three seeds: Brier −0.031 (95% interval −0.045 to −0.016), AUC +0.070 (+0.036 to +0.119), with no detectable change in calibration error. With outcomes shuffled, the same setup gets worse ([`eval/rl_runs5to7.md`](eval/rl_runs5to7.md), [`eval/rl_run8.md`](eval/rl_run8.md)).
 > - **With std scaling on, RL collapses onto a lookup rule.** In all three seeds, near-certain answers pass 90% by about step 130 of 347. More than 98% of evaluation answers end up exactly 0 or 1, matching the rule "has the latest result already crossed the threshold?" Under the training reward itself, that rule scores worse than its calibrated version ([`eval/rl_runs9_10.md`](eval/rl_runs9_10.md)).
-> - **Without usable evidence or a real signal, RL hedges** toward a constant: the proper-score optimum for a forecaster whose answers carry no information.
-> - **The ceiling:** the best runs tie a logistic regression on the same features and trail gradient-boosted trees on AUC (−0.03 to −0.04). The market price (never shown to the model) is far ahead: Brier 0.062 against 0.170. Nothing transfers to weather ([`eval/extra_analyses.md`](eval/extra_analyses.md)).
+> - **Without usable evidence or a real signal, forecasts contract toward a constant**, consistent with hedging when the evidence isn't used.
+> - **Against simple models:** the trained models don't outperform a logistic regression or the counting rule on the same features (intervals include 0), and trail gradient-boosted trees on AUC (−0.03 to −0.04). The market price (never shown to the model) is far ahead: Brier 0.062 against 0.170. No useful discrimination on the weather brackets ([`eval/extra_analyses.md`](eval/extra_analyses.md), [`eval/review_checks.md`](eval/review_checks.md)).
 
 ![Spread of stated probabilities during training: std scaling on vs off, plain prompt vs key numbers](eval/figures/spread_2x2.png)
 
@@ -32,7 +32,7 @@
 | Training | GRPO with TRL + Unsloth, 16-bit LoRA rank 32, one pass, 4 answers per question |
 | Reward | 1 − (stated probability − outcome)², plus a small format reward |
 | Out-of-domain set | Kalshi daily high-temperature brackets, New York and Chicago, never trained on |
-| Evaluation | Brier score, log loss, calibration error, AUC; 95% intervals from resampling whole releases; simple-rule baselines; a shift-matched untrained model |
+| Evaluation | Brier score, log loss, calibration error, AUC; 95% intervals from resampling whole announcements (series released together); simple-rule baselines; a shift-matched untrained model |
 | Benchmark | The market price at question time (never shown to the model) |
 | Compute | About 30 GPU-hours on free Kaggle T4s; $0 |
 

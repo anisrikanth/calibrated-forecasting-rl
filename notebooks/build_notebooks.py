@@ -857,9 +857,12 @@ test_df = pick_eval_sets(df, weather_events=0, econ_split="test")
 val_df = pick_eval_sets(df, weather_events=0)
 check_df = val_df.sample(n=min(CHECK_QUESTIONS, len(val_df)), random_state=SEED) if CHECK_QUESTIONS else val_df.iloc[:0]
 test_rows, check_rows = test_df.to_dict("records"), check_df.to_dict("records")
-print(f"test: {len(test_df)} questions, {test_df['event_ticker'].nunique()} releases, "
-      f"{test_df['market_prob'].notna().sum()} with a market price (the scored set) | "
-      f"dates {test_df['close_dt'].min().date()} to {test_df['close_dt'].max().date()} | yes-rate {test_df['outcome'].mean():.3f}")
+scored = test_df[test_df["market_prob"].notna()]
+print(f"test, eligible: {len(test_df)} questions, {test_df['event_ticker'].nunique()} releases, "
+      f"{test_df['announcement'].nunique()} announcements | dates {test_df['close_dt'].min().date()} to {test_df['close_dt'].max().date()}")
+print(f"test, scored (questions with a market price): {len(scored)} questions, {scored['event_ticker'].nunique()} releases, "
+      f"{scored['announcement'].nunique()} announcements")
+print("not scored (no market price), by series:", test_df.loc[test_df["market_prob"].isna(), "series_ticker"].value_counts().to_dict())
 print(f"validation check: {len(check_df)} questions")'''),
         md("## 7. Load the model (as in the training notebook)"),
         code('''from unsloth import FastLanguageModel
@@ -948,11 +951,22 @@ results = score_table(test_df, methods)
 g = scored_subset(test_df)
 results["sd_p"] = [float(g[m].std()) for m in results["method"]]
 results["share_0_or_1"] = [float(((g[m] <= 0.0) | (g[m] >= 1.0)).mean()) for m in results["method"]]
+y_of = g.set_index("market_ticker")["outcome"]
+
+def single_answer_brier(label):   # mean Brier of the individual answers (an unreadable answer counts as 0.5)
+    a = answers[(answers["condition"] == label) & answers["market_ticker"].isin(g["market_ticker"])]
+    return float(((a["prob"].fillna(0.5) - a["market_ticker"].map(y_of)) ** 2).mean())
+
+results["brier_single_answers"] = [single_answer_brier(m[:-6]) if m.endswith("_mean4") else np.nan for m in results["method"]]
 results.to_csv(f"{OUT_DIR}/test_metrics.csv", index=False)
-results[["method", "n", "brier", "log_loss", "ece", "auc", "mean_p", "sd_p", "share_0_or_1"]]'''),
-        md("## 11. The comparisons fixed in `eval/test_plan.md`, with 95% intervals (resampling whole releases)"),
-        code('''def mean4(labels):
-    return [f"{l}_mean4" for l in labels if l in MODELS]
+results[["method", "n", "brier", "brier_single_answers", "log_loss", "ece", "auc", "mean_p", "sd_p", "share_0_or_1"]]'''),
+        md("## 11. The comparisons fixed in `eval/test_plan.md`, with 95% intervals\n\nResampling whole announcements (all series released together, with all their thresholds); resampling single releases is kept as a sensitivity check. A model whose loading check failed is left out of the group comparisons and reported separately."),
+        code('''BAD = [l for l in check_table.loc[check_table["status"] == "MISMATCH", "model"] if l in ADAPTER_DIRS]  # adapters that failed the check
+if BAD:
+    print("Left out of the comparisons (failed the loading check):", BAD)
+
+def mean4(labels, keep_bad=False):
+    return [f"{l}_mean4" for l in labels if l in MODELS and (keep_bad or l not in BAD)]
 
 COMPARISONS = [   # (id, description, reference columns, compared columns)
     ("P1", "Main setup (runs 4-6) vs untrained, key numbers", mean4(["untrained_keynum"]), mean4(MAIN)),
@@ -967,19 +981,29 @@ COMPARISONS = [   # (id, description, reference columns, compared columns)
 ]
 for l in MAIN + COLLAPSE + ["run8"]:
     COMPARISONS.append(("R", f"{l} vs untrained, key numbers", mean4(["untrained_keynum"]), mean4([l])))
-rows = []
+def run_comparisons(cluster, only=None):
+    rows = []
+    for cid, desc, a_cols, b_cols in COMPARISONS:
+        if not a_cols or not b_cols or (only and cid not in only):   # e.g. a model that wasn't attached
+            continue
+        t = paired_bootstrap_groups(g, a_cols, b_cols, n_boot=N_BOOT, seed=0, cluster=cluster)
+        rows.append(t.assign(id=cid, comparison=desc, models=len(b_cols), cluster=cluster))
+    if not rows:
+        return pd.DataFrame(columns=["id", "comparison", "models", "cluster", "metric", "a", "b", "change",
+                                     "ci_low", "ci_high", "share_better", "b_min", "b_max"])
+    return pd.concat(rows, ignore_index=True)[["id", "comparison", "models", "cluster", "metric", "a", "b", "change",
+                                                "ci_low", "ci_high", "share_better", "b_min", "b_max"]]
+
 t0 = time.time()
-for cid, desc, a_cols, b_cols in COMPARISONS:
-    if not a_cols or not b_cols:   # a model that wasn't attached (optional run 2 is never compared)
-        continue
-    t = paired_bootstrap_groups(g, a_cols, b_cols, n_boot=N_BOOT, seed=0)
-    rows.append(t.assign(id=cid, comparison=desc, models=len(b_cols)))
-comparisons = pd.concat(rows, ignore_index=True)[["id", "comparison", "models", "metric", "a", "b", "change",
-                                                  "ci_low", "ci_high", "share_better", "b_min", "b_max"]]
+comparisons = run_comparisons("announcement")
 comparisons.to_csv(f"{OUT_DIR}/test_comparisons.csv", index=False)
-print(f"({(time.time() - t0) / 60:.1f} min)")
+by_release = run_comparisons("event_ticker", only={"P1", "P2", "S1"})     # sensitivity: resample single releases
+by_release.to_csv(f"{OUT_DIR}/test_comparisons_by_release.csv", index=False)
+print(f"({(time.time() - t0) / 60:.1f} min) | {g['announcement'].nunique()} announcements, {g['event_ticker'].nunique()} releases")
 show = comparisons[comparisons["metric"].isin(["brier", "log_loss", "ece", "auc"])]
-show.round(4)'''),
+show_release = by_release[by_release["metric"].isin(["brier", "log_loss", "ece", "auc"])]
+display(show.round(4))
+show_release.round(4)'''),
         md("P3: do the std-scaling-on runs collapse onto the latest-result rule again? `answers_equal_to_rule` is the share of single answers, on the questions with a numeric threshold (Fed decisions have no rule), that are exactly the rule's 0 or 1."),
         code('''from env.baselines import latest_rule_column
 rule_q = g[latest_rule_column(g).notna()]
@@ -1005,16 +1029,19 @@ ladder'''),
         md("## 12. Summary to paste back"),
         code('''print("=" * 25, "COPY FROM HERE", "=" * 25)
 print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | test split | {EVAL_SAMPLES} samples at {EVAL_TEMPERATURE} | seed {SEED}")
-print(f"test: {len(test_df)} questions, {len(g)} scored, {g['event_ticker'].nunique()} releases | models: {ORDER}")
+print(f"test: {len(test_df)} eligible, {len(g)} scored, {g['event_ticker'].nunique()} releases, "
+      f"{g['announcement'].nunique()} announcements | models: {ORDER} | left out of comparisons: {BAD}")
 print()
 print(check_table.to_string(index=False))
 print()
 print(answers.groupby("condition").agg(readable=("prob", lambda s: round(s.notna().mean(), 3)),
                                        median_tokens=("n_tokens", "median")).loc[ORDER].to_string())
 print()
-print(results[["method", "n", "brier", "log_loss", "ece", "auc", "mean_p", "sd_p", "share_0_or_1"]].to_string(index=False))
+print(results[["method", "n", "brier", "brier_single_answers", "log_loss", "ece", "auc", "mean_p", "sd_p", "share_0_or_1"]].to_string(index=False))
 print()
 print(show.round(4).to_string(index=False))
+print()
+print(show_release.round(4).to_string(index=False))
 print()
 print(collapse.to_string(index=False))
 print()

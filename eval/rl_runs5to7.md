@@ -2,11 +2,13 @@
 
 Runs 5 and 6 repeat run 4 (key numbers, GRPO std scaling off) with training seeds 1 and 2. Run 7 is run 1 (plain prompt) with std scaling off, which completes the 2 × 2 of prompt × std scaling. All runs: Llama 3.2 3B Instruct, LoRA rank 32, Brier plus format reward, one pass of 347 steps at learning rate 1e-5, 4 answers per question; repo commit 0f576a3 (runs 5 to 7). Evaluation as before: 410 validation econ questions (36 releases), 360 held-out weather questions (60 days), 4 answers at temperature 0.7 averaged, with the eval days and sampling seed held fixed across runs.
 
+> **Note (29 October 2026, after outside review):** the intervals on this page resample single releases. Validation has only 13 independent announcements (series released together resolve together); announcement-level intervals, which leave every conclusion here unchanged, are in [`review_checks.md`](review_checks.md).
+
 ## Results in brief
 
 1. **The main result replicates across three seeds.** Averaged over runs 4 to 6, against the untrained model with the same prompt: Brier **−0.031** (95% interval −0.049 to −0.013), AUC **+0.070** (+0.029 to +0.115), log loss −0.072 (−0.118 to −0.024), calibration error unchanged (+0.008, −0.027 to +0.038). The seeds barely differ: Brier 0.169 to 0.171 (standard deviation 0.0014), AUC 0.820 to 0.832 (0.0064). Each seed's interval alone also excludes zero for Brier and AUC.
-2. **The seeds tie the logistic regression on the same evidence:** Brier +0.008 (−0.035 to +0.041), AUC −0.028 (−0.061 to +0.006).
-3. **Without the key numbers, unbiased RL learns nothing useful (run 7).** Against the untrained plain-prompt model: Brier −0.009 (−0.026 to +0.007), AUC −0.035 (−0.092 to +0.019). Its forecasts squeezed toward one number: the spread fell from 0.166 to 0.061, and every validation forecast lies between 0.36 and 0.71. This is the proper-scoring-rule optimum for a model that is not using its evidence. It still scores worse than simply stating the base rate (0.263 vs 0.243).
+2. **Against the logistic regression on the same evidence, the difference is not resolved:** Brier +0.008 (−0.035 to +0.041), AUC −0.028 (−0.061 to +0.006). This does not show equivalence.
+3. **Without the key numbers, RL without std scaling learns nothing useful (run 7).** Against the untrained plain-prompt model: Brier −0.009 (−0.026 to +0.007), AUC −0.035 (−0.092 to +0.019). Its forecasts squeezed toward one number: the spread fell from 0.166 to 0.061, and every validation forecast lies between 0.36 and 0.71. This is the proper-scoring-rule optimum for a model that is not using its evidence. It still scores worse than simply stating the base rate (0.263 vs 0.243).
 4. **No transfer to weather.** Averaged over the three seeds, weather Brier changes by −0.007 (−0.019 to +0.006), and AUC stays at about 0.43.
 
 ## The 2 × 2 on the validation econ questions

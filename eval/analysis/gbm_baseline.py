@@ -7,7 +7,8 @@ Two versions, both fitted on the training questions only and scored like every o
 - `gbm_series`: those 5 plus the series (CPI, payrolls, ...) as a categorical feature, so the trees can
   learn, e.g., that payrolls are noisy.
 The procedure is fixed in advance: scikit-learn's HistGradientBoostingClassifier, hyperparameters chosen
-from a small grid by 5-fold cross-validation on the training questions (folds keep each release whole),
+from a small grid by 5-fold cross-validation on the training questions (folds keep each announcement whole:
+all series released together, with all their thresholds),
 lowest log loss wins, then refitted on all training questions. Questions without a numeric threshold
 (Fed decisions) get the series base rate, as for the logistic regression.
 
@@ -28,8 +29,8 @@ SPLIT = sys.argv[4] if len(sys.argv) > 4 else "val"
 sys.path.insert(0, REPO)
 from env import metrics as M                                                         # noqa: E402
 from env.baselines import rule_features                                              # noqa: E402
-from env.evaluation import (add_forecast_columns, load_markets, paired_bootstrap,    # noqa: E402
-                            paired_bootstrap_groups, pick_eval_sets)
+from env.evaluation import (add_forecast_columns, announcement_ids, load_markets,     # noqa: E402
+                            paired_bootstrap, paired_bootstrap_groups, pick_eval_sets)
 
 GRID = {"max_depth": [2, 3], "learning_rate": [0.03, 0.1], "max_iter": [100, 300]}
 FIXED = dict(min_samples_leaf=20, l2_regularization=1.0, early_stopping=False, random_state=0)
@@ -54,7 +55,7 @@ def fit_gbm(train, with_series):
     codes = {s: i for i, s in enumerate(sorted(train["series_ticker"].unique()))} if with_series else None
     X, ok = features(train, codes)
     y = train["outcome"].to_numpy(int)[ok]
-    groups = train["event_ticker"].to_numpy()[ok]
+    groups = announcement_ids(train).to_numpy()[ok]           # folds keep each announcement whole
     best, results = None, []
     for values in itertools.product(*GRID.values()):
         params = dict(zip(GRID, values))
@@ -108,11 +109,11 @@ boots = []
 for es, g in ev.groupby("eval_set"):
     g = g.reset_index(drop=True)
     for a, b in (("logistic", "gbm"), ("logistic", "gbm_series")):
-        t = paired_bootstrap(g, a, b, n_boot=4000, seed=0).rename(columns={a: "a", b: "b"})
+        t = paired_bootstrap(g, a, b, n_boot=4000, seed=0, cluster="announcement").rename(columns={a: "a", b: "b"})
         boots.append(t.assign(eval_set=es, comparison=f"{b} vs {a}"))
     if len(answers) == 3:
         for ref in ("gbm", "gbm_series"):
-            t = paired_bootstrap_groups(g, [ref], list(answers.values()), n_boot=4000, seed=0)
+            t = paired_bootstrap_groups(g, [ref], list(answers.values()), n_boot=4000, seed=0, cluster="announcement")
             boots.append(t.assign(eval_set=es, comparison=f"runs 4-6 vs {ref}"))
 boot = pd.concat(boots, ignore_index=True)[["eval_set", "comparison", "metric", "a", "b", "change", "ci_low", "ci_high"]]
 

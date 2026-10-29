@@ -150,3 +150,16 @@ def test_consistency_table_on_another_econ_set():
     ev["m"] = 0.5
     t = consistency_table(ev.assign(eval_set=ev["eval_set"].replace({"val_econ": "test_econ"})), ["m"], econ_set="test_econ")
     assert t.loc[0, "ladder_pairs"] == consistency_table(ev, ["m"]).loc[0, "ladder_pairs"] > 0
+
+
+def test_announcement_ids_group_same_day_releases():
+    from env.evaluation import announcement_ids
+    df = pd.DataFrame({"close_time": ["2026-01-13T13:25:00Z", "2026-01-13T13:29:00Z", "2026-01-09T13:29:00Z",
+                                      "2026-01-14T04:30:00Z"],
+                       "group": ["econ", "econ", "econ", "weather"]})
+    df["close_dt"] = pd.to_datetime(df["close_time"], utc=True)
+    ids = announcement_ids(df)
+    assert ids[0] == ids[1] == "econ:2026-01-13" and ids[2] == "econ:2026-01-09"
+    assert ids[3] == "weather:2026-01-13"                       # 04:30 UTC is still the 13th in New York
+    ev = pick_eval_sets(make_df(), weather_events=2, seed=0)
+    assert "announcement" in ev and ev.groupby("event_ticker")["announcement"].nunique().eq(1).all()

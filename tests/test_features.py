@@ -297,3 +297,16 @@ def test_text_key_and_reproduction_check():
     r = reproduction_check(moved, stored)
     assert r["status"] == "MISMATCH" and r["corr"] == pytest.approx(-1.0) and r["questions"] == 20
     assert reproduction_check(new.assign(market_ticker="X"), stored)["status"] == "no overlap"
+
+
+def test_bootstrap_cluster_unit():
+    from env.evaluation import paired_bootstrap_groups
+    ev = eval_frame()
+    ev["trained"] = ev["trained"] + ev["event_ticker"].map({"E0": 0.3, "E1": -0.2, "E2": 0.1, "E3": 0.0, "E4": 0.25, "E5": -0.1})
+    ev["announcement"] = ev["event_ticker"].map({"E0": "A", "E1": "A", "E2": "B", "E3": "C", "E4": "C", "E5": "D"})
+    by_event = paired_bootstrap(ev, "base", "trained", n_boot=200, seed=0)
+    by_ann = paired_bootstrap(ev, "base", "trained", n_boot=200, seed=0, cluster="announcement")
+    assert np.allclose(by_event["change"], by_ann["change"])                 # point estimates don't depend on the unit
+    assert not np.allclose(by_event["ci_low"].to_numpy(float), by_ann["ci_low"].to_numpy(float), equal_nan=True)
+    g = paired_bootstrap_groups(ev, ["base"], ["trained"], n_boot=200, seed=0, cluster="announcement")
+    assert np.allclose(g["ci_low"].to_numpy(float), by_ann["ci_low"].to_numpy(float), equal_nan=True)
