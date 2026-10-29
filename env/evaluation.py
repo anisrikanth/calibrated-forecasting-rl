@@ -6,6 +6,7 @@ notebook, because it needs the GPU; everything here runs anywhere and is unit-te
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Iterable, Optional, Sequence
 
 import numpy as np
@@ -31,15 +32,16 @@ def load_markets(path: str) -> pd.DataFrame:
 
 
 def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
-                   weather_from: str = "2026-01-01") -> pd.DataFrame:
-    """val_econ = every validation question; heldout_weather = whole days sampled from `weather_from`
-    on. Adds baselines: `base_rate` (each econ series' yes-rate in train, each weather series'
+                   weather_from: str = "2026-01-01", econ_split: str = "val") -> pd.DataFrame:
+    """val_econ = every validation question (test_econ with econ_split="test": the untouched test
+    split, scored once at the end); heldout_weather = whole days sampled from `weather_from` on
+    (none with weather_events=0). Adds baselines: `base_rate` (each econ series' yes-rate in train, each weather series'
     yes-rate in held-out days before `weather_from`), `always_0.5`, `market`, `recent_hits`
     (share of the recent results in the context that would have resolved YES under this question's
     rule), `latest_rule` (1 if the latest result already would have, else 0) and `logistic` (a
     logistic regression on the key numbers, fitted on train; env/baselines.py). The last three use
     base_rate where there is no numeric threshold or no recent result."""
-    val = df[df["split"] == "val"]
+    val = df[df["split"] == econ_split]
     held = df[df["split"] == "heldout"]
     days = held.loc[held["close_dt"] >= weather_from, "event_ticker"].drop_duplicates()
     picked = days.sample(n=min(weather_events, len(days)), random_state=seed) if len(days) else days
@@ -48,7 +50,7 @@ def pick_eval_sets(df: pd.DataFrame, weather_events: int = 60, seed: int = 3407,
     train = df[df["split"] == "train"]
     base_rates = pd.concat([train.groupby("series_ticker")["outcome"].mean(),
                             held[held["close_dt"] < weather_from].groupby("series_ticker")["outcome"].mean()])
-    out = pd.concat([val.assign(eval_set="val_econ"), weather.assign(eval_set="heldout_weather")],
+    out = pd.concat([val.assign(eval_set=f"{econ_split}_econ"), weather.assign(eval_set="heldout_weather")],
                     ignore_index=True)
     fallback = train["outcome"].mean() if len(train) else 0.5
     out["base_rate"] = out["series_ticker"].map(base_rates).fillna(fallback)
@@ -75,6 +77,35 @@ def collect_answers(rows: Sequence[dict], outputs: Sequence[Any], condition: str
                             "text": c.text, "prob": extract_probability(c.text),
                             "n_tokens": len(getattr(c, "token_ids", []) or [])})
     return pd.DataFrame(records, columns=["market_ticker", "condition", "sample", "text", "prob", "n_tokens"])
+
+
+def text_key(text: Any) -> str:
+    """Short fingerprint of an answer's text (line endings and outer whitespace ignored), so a
+    re-run can be checked against stored answers without storing the text."""
+    norm = str(text).replace("\r\n", "\n").strip() if isinstance(text, str) else ""
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+
+
+def reproduction_check(new: pd.DataFrame, stored: pd.DataFrame) -> dict:
+    """Compares re-generated answers with stored ones for the same questions and samples (same
+    prompt and sampling seed). Both have market_ticker, sample, prob; `new` has text, `stored` has
+    text_key. A correctly loaded model gives mostly identical answers (0.88 of answers in our
+    reproduction of the untrained model); a different training seed of the same setup gives almost
+    none, and its question averages differ by 0.07 to 0.11. status: "match" (at least half the
+    answers identical), "close" (averages within 0.04 on average) or "MISMATCH"."""
+    k = ["market_ticker", "sample"]
+    n = new.assign(text_key=new["text"].map(text_key))
+    j = n[k + ["prob", "text_key"]].merge(stored[k + ["prob", "text_key"]], on=k, suffixes=("_new", "_stored"))
+    if j.empty:
+        return {"questions": 0, "answers": 0, "identical_text": np.nan, "mean_abs_diff": np.nan,
+                "corr": np.nan, "status": "no overlap"}
+    m = j.groupby("market_ticker")[["prob_new", "prob_stored"]].mean().fillna(0.5)
+    identical = float((j["text_key_new"] == j["text_key_stored"]).mean())
+    mad = float((m["prob_new"] - m["prob_stored"]).abs().mean())
+    corr = float(m["prob_new"].corr(m["prob_stored"])) if m["prob_new"].std() > 0 and m["prob_stored"].std() > 0 else np.nan
+    status = "match" if identical >= 0.5 else ("close" if mad <= 0.04 else "MISMATCH")
+    return {"questions": len(m), "answers": len(j), "identical_text": round(identical, 3),
+            "mean_abs_diff": round(mad, 4), "corr": round(corr, 3) if corr == corr else np.nan, "status": status}
 
 
 def add_forecast_columns(eval_df: pd.DataFrame, answers: pd.DataFrame, condition: str, prefix: str) -> pd.DataFrame:
@@ -114,10 +145,10 @@ def by_series_table(eval_df: pd.DataFrame, methods: Iterable[str], eval_set: str
     return pd.DataFrame(rows).set_index("series_ticker") if rows else pd.DataFrame()
 
 
-def consistency_table(eval_df: pd.DataFrame, methods: Iterable[str]) -> pd.DataFrame:
+def consistency_table(eval_df: pd.DataFrame, methods: Iterable[str], econ_set: str = "val_econ") -> pd.DataFrame:
     rows = []
     econ = scored_subset(eval_df)
-    econ = econ[econ["eval_set"] == "val_econ"]
+    econ = econ[econ["eval_set"] == econ_set]
     weather = eval_df[eval_df["eval_set"] == "heldout_weather"]
     for m in methods:
         lad = M.ladder_violations(econ, m)
@@ -194,6 +225,43 @@ def paired_bootstrap(g: pd.DataFrame, a: str, b: str, n_boot: int = 4000, seed: 
         better = np.mean(d > 0) if k in HIGHER_IS_BETTER else np.mean(d < 0)
         rows.append({"metric": k, a: f(pa, y), b: f(pb, y), "change": f(pb, y) - f(pa, y),
                      "ci_low": lo, "ci_high": hi, "share_better": float(better) if len(d) else np.nan})
+    return pd.DataFrame(rows)
+
+
+def paired_bootstrap_groups(g: pd.DataFrame, a_cols: Sequence[str], b_cols: Sequence[str], n_boot: int = 4000,
+                            seed: int = 0, stats: dict = None) -> pd.DataFrame:
+    """Like paired_bootstrap, for groups of forecasts (e.g. three training seeds): change = average
+    over b_cols of each metric minus the average over a_cols, with every draw resampling the same
+    whole events for all columns. The interval covers question sampling, not seed variation;
+    b_min / b_max give the spread across b_cols."""
+    stats = stats or BOOTSTRAP_STATS
+    rng = np.random.default_rng(seed)
+    g = g.reset_index(drop=True)
+    ev = g["event_ticker"].to_numpy()
+    events = pd.unique(ev)
+    idx = {e: np.flatnonzero(ev == e) for e in events}
+    y = g["outcome"].to_numpy()
+    A = [g[c].to_numpy(dtype=float) for c in a_cols]
+    B = [g[c].to_numpy(dtype=float) for c in b_cols]
+
+    def diff(f, pick):
+        return np.mean([f(b[pick], y[pick]) for b in B]) - np.mean([f(a[pick], y[pick]) for a in A])
+
+    draws = {k: np.empty(n_boot) for k in stats}
+    for i in range(n_boot):
+        pick = np.concatenate([idx[e] for e in rng.choice(events, size=len(events), replace=True)])
+        for k, f in stats.items():
+            draws[k][i] = diff(f, pick)
+    rows, everything = [], np.arange(len(g))
+    for k, f in stats.items():
+        d = draws[k][~np.isnan(draws[k])]
+        lo, hi = np.percentile(d, [2.5, 97.5]) if len(d) else (np.nan, np.nan)
+        better = np.mean(d > 0) if k in HIGHER_IS_BETTER else np.mean(d < 0)
+        per_b = [f(b, y) for b in B]
+        rows.append({"metric": k, "a": float(np.mean([f(a, y) for a in A])), "b": float(np.mean(per_b)),
+                     "change": diff(f, everything), "ci_low": lo, "ci_high": hi,
+                     "share_better": float(better) if len(d) else np.nan,
+                     "b_min": float(np.min(per_b)), "b_max": float(np.max(per_b))})
     return pd.DataFrame(rows)
 
 

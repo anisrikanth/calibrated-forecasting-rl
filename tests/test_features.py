@@ -263,3 +263,37 @@ def test_render_prompt_passes_ablation_options():
     row = cpi_row()
     assert render_prompt(Tok(), row, True, True, ["rule"]) == build_user_message(row, True, True, ["rule"])
     assert render_prompt(Tok(), row, include_context=True, estimate_first=True) == build_user_message(row, True, estimate_first=True)
+
+
+def test_paired_bootstrap_groups():
+    from env.evaluation import paired_bootstrap_groups
+    ev = eval_frame()
+    ev["trained2"] = ev["trained"] - 0.05
+    one = paired_bootstrap(ev, "base", "trained", n_boot=300, seed=3)
+    grp = paired_bootstrap_groups(ev, ["base"], ["trained"], n_boot=300, seed=3)
+    for c in ("change", "ci_low", "ci_high", "share_better"):
+        assert np.allclose(one[c].to_numpy(float), grp[c].to_numpy(float), equal_nan=True)
+    t = paired_bootstrap_groups(ev, ["base"], ["trained", "trained2"], n_boot=200, seed=0).set_index("metric")
+    b1, b2 = M.brier(ev["trained"], ev["outcome"]), M.brier(ev["trained2"], ev["outcome"])
+    assert t.loc["brier", "b"] == pytest.approx((b1 + b2) / 2)
+    assert t.loc["brier", "change"] == pytest.approx((b1 + b2) / 2 - M.brier(ev["base"], ev["outcome"]))
+    assert t.loc["brier", "b_min"] == pytest.approx(min(b1, b2)) and t.loc["brier", "b_max"] == pytest.approx(max(b1, b2))
+    assert t.loc["brier", "ci_low"] <= t.loc["brier", "change"] <= t.loc["brier", "ci_high"]
+    both = paired_bootstrap_groups(ev, ["trained", "trained2"], ["trained", "trained2"], n_boot=50).set_index("metric")
+    assert (both["change"].abs() < 1e-12).all()
+
+
+def test_text_key_and_reproduction_check():
+    from env.evaluation import reproduction_check, text_key
+    assert text_key("a\r\nb  ") == text_key("a\nb") != text_key("a b")
+    assert text_key(None) == text_key(float("nan")) == text_key("")
+    rows = [dict(market_ticker=f"Q{q}", sample=s, text=f"answer {q}-{s}", prob=(q % 5) / 5) for q in range(20) for s in range(4)]
+    new = pd.DataFrame(rows)
+    stored = new.assign(text_key=new["text"].map(text_key)).drop(columns="text")
+    assert reproduction_check(new, stored)["status"] == "match"
+    other = new.assign(text=new["text"] + " (other seed)")
+    assert reproduction_check(other, stored)["status"] == "close"               # different text, same numbers
+    moved = other.assign(prob=1 - other["prob"])
+    r = reproduction_check(moved, stored)
+    assert r["status"] == "MISMATCH" and r["corr"] == pytest.approx(-1.0) and r["questions"] == 20
+    assert reproduction_check(new.assign(market_ticker="X"), stored)["status"] == "no overlap"

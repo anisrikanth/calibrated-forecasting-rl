@@ -133,3 +133,20 @@ def test_monitored_reward_scores_logs_and_records():
     assert list(fl.index) == ["first", "last"] and fl.loc["first", "n"] == 2
     with pytest.raises(ValueError):
         MonitoredScoreReward("accuracy")
+
+
+def test_pick_eval_sets_test_split_without_weather():
+    df = make_df()
+    df.loc[df["event_ticker"] == "KXCPI-5", "split"] = "test"
+    ev = pick_eval_sets(df, weather_events=0, econ_split="test")
+    assert set(ev["eval_set"]) == {"test_econ"} and len(ev) == 2 and (ev["split"] == "test").all()
+    assert ev["base_rate"].eq(0.5).all() and ev["logistic"].notna().all()
+    default = pick_eval_sets(df, weather_events=2, seed=0)                       # default unchanged
+    assert set(default["eval_set"]) == {"val_econ", "heldout_weather"} and (default.loc[default.eval_set == "val_econ", "split"] == "val").all()
+
+
+def test_consistency_table_on_another_econ_set():
+    ev = pick_eval_sets(make_df(), weather_events=2, seed=0)
+    ev["m"] = 0.5
+    t = consistency_table(ev.assign(eval_set=ev["eval_set"].replace({"val_econ": "test_econ"})), ["m"], econ_set="test_econ")
+    assert t.loc[0, "ladder_pairs"] == consistency_table(ev, ["m"]).loc[0, "ladder_pairs"] > 0

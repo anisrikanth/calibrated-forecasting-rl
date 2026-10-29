@@ -727,9 +727,284 @@ print("=" * 25, "COPY TO HERE", "=" * 27)'''),
     return nb
 
 
+def test_eval() -> nbf.NotebookNode:
+    cells = [
+        md("""# Phase 4: one evaluation on the untouched test split
+
+Scores the saved models on the **test split** (495 econ questions, 36 releases, June to October 2026), which no run, prompt or setting has been chosen on. What is compared, and what would count as the main result holding up, is fixed in advance in `eval/test_plan.md`. This notebook runs once; nothing about the training or the prompts changes after it.
+
+No training here. It loads each run's saved LoRA adapter from that run's notebook version, plus the untrained model, and scores them all with the same prompts and sampling as the training runs (4 answers at temperature 0.7, averaged). Before the test set, it re-scores 80 validation questions with every model and compares them with the answers that run gave at the time, so a wrongly loaded adapter shows up before any test question is scored.
+
+**Before Run All**, in the right sidebar:
+1. **Add Input → Your Work → Datasets →** your `markets.csv` dataset.
+2. **Add Input → Your Work → Notebooks →** your training notebook, once for each run in the Settings cell, picking that run's **version** each time (runs 1 to 4 are versions of the first training notebook, runs 5 to 10 of the one made for run 5). Each version's output holds its adapter in `lora_<run name>/`.
+3. **Check the inputs first, without a GPU:** with **Accelerator → None**, run the code under sections 1 and 2 by hand. Section 2 lists every adapter it finds and stops with the names of any that are missing. This uses no GPU quota.
+   - If Kaggle won't attach more than one version of the same notebook: open each run's version, go to **Output**, download its `lora_<run name>` folder (two files), put all the folders into one new dataset, and attach that instead. Section 2 finds the adapters wherever they are in the inputs.
+4. Then **Accelerator → GPU T4 x2**, **Internet → On**, and **Save Version → Save & Run All**. About 3 hours (about 12 minutes per model on the test set, plus the checks).
+
+Answers are saved after every model, so a session that ends early still keeps the finished ones. At the end, copy the block between **COPY FROM HERE** and **COPY TO HERE** back to Claude and download `test_answers.csv`, `test_check.csv` and `test_comparisons.csv`."""),
+        md("## 1. Settings"),
+        code('''MODEL_NAME = "unsloth/Llama-3.2-3B-Instruct"
+RUN_NAME = "test_eval_3b"
+LORA_RANK = 32                    # the rank every run was trained with
+
+# label: (run name, trained with the key-numbers prompt?). Each training version saved lora_<run name>/.
+ADAPTERS = {
+    "run1":  ("3b_brier_ctx_lr1e-5", False),            # plain prompt, std scaling on
+    "run2":  ("3b_brier_ctx_lr2e-5_2ep", False),        # plain prompt, 2 passes at lr 2e-5 (optional)
+    "run3":  ("3b_brier_keynum_lr1e-5", True),          # key numbers, std scaling on, seed 3407
+    "run4":  ("3b_brier_keynum_lr1e-5_nostd", True),    # key numbers, std scaling off, seed 3407
+    "run5":  ("3b_brier_keynum_nostd_seed1", True),     # key numbers, std scaling off, seed 1
+    "run6":  ("3b_brier_keynum_nostd_seed2", True),     # key numbers, std scaling off, seed 2
+    "run7":  ("3b_brier_ctx_nostd", False),             # plain prompt, std scaling off
+    "run8":  ("3b_brier_keynum_nostd_shuffled", True),  # key numbers, std scaling off, shuffled outcomes
+    "run9":  ("3b_brier_keynum_seed1", True),           # key numbers, std scaling on, seed 1
+    "run10": ("3b_brier_keynum_seed2", True),           # key numbers, std scaling on, seed 2
+}
+OPTIONAL = ["run2"]               # scored if attached, skipped if not
+MAIN = ["run4", "run5", "run6"]   # groups fixed in eval/test_plan.md
+COLLAPSE = ["run3", "run9", "run10"]
+
+CHECK_QUESTIONS = 80              # validation questions re-scored per model before the test set (0 = skip)
+STOP_IF_CHECKS_FAIL = True        # stop before the test set if no adapter reproduces its stored answers
+
+EVAL_SAMPLES = 4
+EVAL_TEMPERATURE = 0.7
+SEED = 3407                       # eval sampling seed, as in every run
+N_BOOT = 4000
+
+REPO_URL = "https://github.com/anisrikanth/calibrated-forecasting-rl.git"
+OUT_DIR = "/kaggle/working"'''),
+        md("## 2. Find the inputs (runs without a GPU)"),
+        code('''import glob, json, os
+
+assert glob.glob("/kaggle/input/**/markets.csv", recursive=True), \\
+    "No markets.csv found. Add your dataset: Add Input > Your Work > Datasets."
+found = {}
+for f in glob.glob("/kaggle/input/**/adapter_model.safetensors", recursive=True):
+    d = os.path.dirname(f)
+    if "checkpoint-" in d:
+        continue                  # mid-run checkpoints, not the final adapter
+    name = os.path.basename(d)
+    found.setdefault(name[5:] if name.startswith("lora_") else name, []).append(d)
+
+ADAPTER_DIRS, missing = {}, []
+for label, (name, key_numbers) in ADAPTERS.items():
+    dirs = sorted(found.get(name, []))
+    rank = None
+    if dirs:
+        ADAPTER_DIRS[label] = dirs[0]
+        try:
+            rank = json.load(open(os.path.join(dirs[0], "adapter_config.json"))).get("r")
+        except Exception:
+            pass
+        assert rank in (None, LORA_RANK), f"{label}: adapter rank {rank}, expected {LORA_RANK}"
+    elif label not in OPTIONAL:
+        missing.append(f"{label} ({name})")
+    where = dirs[0] if dirs else ("not attached (optional, skipped)" if label in OPTIONAL else "NOT FOUND")
+    print(f"{label:6s} {name:32s} {'key numbers' if key_numbers else 'plain prompt':13s} rank {rank} | {where}"
+          + (f" (+{len(dirs) - 1} more copies)" if len(dirs) > 1 else ""))
+extra = sorted(set(found) - {n for n, _ in ADAPTERS.values()})
+if extra:
+    print("Other adapters in the inputs (not scored):", extra)
+assert not missing, ("Missing: " + ", ".join(missing) + ". Attach those runs' notebook versions "
+                     "(Add Input > Your Work > Notebooks, pick the version), or fix the run name in ADAPTERS.")
+print(f"\\nAll inputs found: {len(ADAPTER_DIRS)} adapters plus the untrained model.")'''),
+        md("## 3. Check the GPU"),
+        code(GPU_CHECK),
+        md("## 4. Install Unsloth, vLLM and TRL (5–10 minutes)"),
+        code(INSTALL),
+        md("## 5. Get the project code (includes the test plan and the stored validation answers)"),
+        code(CLONE_REPO + '''
+from env.evaluation import (load_markets, pick_eval_sets, render_prompt, collect_answers, add_forecast_columns,
+                            score_table, by_series_table, consistency_table, paired_bootstrap_groups,
+                            reproduction_check, scored_subset)
+from env import metrics as M
+PLAN = os.path.join(REPO_DIR, "eval", "test_plan.md")
+assert os.path.exists(PLAN), "eval/test_plan.md is not in the repo: push it before running the test set."
+print(open(PLAN).read().splitlines()[0])'''),
+        md("## 6. Load the data"),
+        code('''import time
+import numpy as np
+import pandas as pd
+
+df = load_markets(glob.glob("/kaggle/input/**/markets.csv", recursive=True)[0])
+test_df = pick_eval_sets(df, weather_events=0, econ_split="test")
+val_df = pick_eval_sets(df, weather_events=0)
+check_df = val_df.sample(n=min(CHECK_QUESTIONS, len(val_df)), random_state=SEED) if CHECK_QUESTIONS else val_df.iloc[:0]
+test_rows, check_rows = test_df.to_dict("records"), check_df.to_dict("records")
+print(f"test: {len(test_df)} questions, {test_df['event_ticker'].nunique()} releases, "
+      f"{test_df['market_prob'].notna().sum()} with a market price (the scored set) | "
+      f"dates {test_df['close_dt'].min().date()} to {test_df['close_dt'].max().date()} | yes-rate {test_df['outcome'].mean():.3f}")
+print(f"validation check: {len(check_df)} questions")'''),
+        md("## 7. Load the model (as in the training notebook)"),
+        code('''from unsloth import FastLanguageModel
+import torch
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name = MODEL_NAME,
+    max_seq_length = 1536,
+    load_in_4bit = False,
+    fast_inference = True,
+    max_lora_rank = LORA_RANK,
+    gpu_memory_utilization = 0.85,   # lower to 0.7 if out of memory
+)
+model = FastLanguageModel.get_peft_model(   # only so load_lora is available, exactly as in training
+    model,
+    r = LORA_RANK,
+    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    lora_alpha = LORA_RANK,
+    use_gradient_checkpointing = "unsloth",
+    random_state = SEED,
+)
+
+from vllm import SamplingParams
+params = SamplingParams(n=EVAL_SAMPLES, temperature=EVAL_TEMPERATURE, top_p=0.95, max_tokens=320, seed=SEED)
+# every model scored here: label -> (LoRA request or None for the untrained model, key-numbers prompt?)
+MODELS = {"untrained_keynum": (None, True), "untrained_plain": (None, False)}
+for label, d in ADAPTER_DIRS.items():
+    MODELS[label] = (model.load_lora(d), ADAPTERS[label][1])
+ORDER = ["untrained_keynum"] + MAIN + COLLAPSE + ["untrained_plain"] + [l for l in MODELS if l not in
+         ["untrained_keynum", "untrained_plain"] + MAIN + COLLAPSE]
+ORDER = [l for l in ORDER if l in MODELS]
+
+def generate(rows, label):
+    lora, key_numbers = MODELS[label]
+    prompts = [render_prompt(tokenizer, r, True, key_numbers) for r in rows]
+    outs = model.fast_generate(prompts, sampling_params=params, lora_request=lora)
+    return collect_answers(rows, outs, label)
+
+ex = test_rows[0]
+for kn in (False, True):
+    print(f"===== {'key numbers' if kn else 'plain'} prompt, end of a test question:")
+    print(render_prompt(tokenizer, ex, True, kn)[-500:], "\\n")'''),
+        md("""## 8. Check every model on validation questions it has seen before
+
+For each model, the 80 validation questions are answered again with the same prompt and sampling seed, and compared with the answers that run gave when it was trained (`eval/answers/`). A correctly loaded model gives mostly **identical** answers ("match"); a different training seed of the same setup gives almost none. "close" means different wording but nearly the same forecasts."""),
+        code('''checks = []
+for label in ORDER:
+    stored_path = os.path.join(REPO_DIR, "eval", "answers", f"val_{label}.csv")
+    if not CHECK_QUESTIONS or not os.path.exists(stored_path):
+        checks.append({"model": label, "status": "no stored answers" if CHECK_QUESTIONS else "skipped"})
+        continue
+    t0 = time.time()
+    new = generate(check_rows, label)
+    stored = pd.read_csv(stored_path)
+    stored = stored[stored["market_ticker"].isin(check_df["market_ticker"])]
+    checks.append({"model": label, **reproduction_check(new, stored), "minutes": round((time.time() - t0) / 60, 1)})
+    print(checks[-1])
+check_table = pd.DataFrame(checks)
+check_table.to_csv(f"{OUT_DIR}/test_check.csv", index=False)
+print(check_table.to_string(index=False))
+adapter_checks = check_table[check_table["model"].isin(ADAPTER_DIRS) & check_table["status"].isin(["match", "close", "MISMATCH"])]
+if STOP_IF_CHECKS_FAIL and len(adapter_checks) and (adapter_checks["status"] == "MISMATCH").all():
+    raise RuntimeError("No adapter reproduced its validation answers, so the adapters are not loading as trained. "
+                       "Stopped before the test set; send this table to Claude.")
+bad = check_table.loc[check_table["status"] == "MISMATCH", "model"].tolist()
+print("\\nAll checked models reproduce their answers." if not bad else f"\\nMISMATCH (scored anyway, flagged): {bad}")'''),
+        md("## 9. Score the test set (answers saved after every model)"),
+        code('''answers_path = f"{OUT_DIR}/test_answers.csv"
+all_answers = []
+for label in ORDER:
+    t0 = time.time()
+    ans = generate(test_rows, label)
+    all_answers.append(ans)
+    pd.concat(all_answers, ignore_index=True).to_csv(answers_path, index=False)
+    tmp = scored_subset(add_forecast_columns(test_df, ans, label, label))
+    print(f"{label:17s} {(time.time() - t0) / 60:4.1f} min | readable {ans['prob'].notna().mean():.3f} | "
+          f"median tokens {ans['n_tokens'].median():.0f} | Brier {M.brier(tmp[label + '_mean4'], tmp['outcome']):.4f} | "
+          f"AUC {M.auc(tmp[label + '_mean4'], tmp['outcome']):.3f}")
+answers = pd.concat(all_answers, ignore_index=True)
+for label in ORDER:
+    test_df = add_forecast_columns(test_df, answers, label, label)'''),
+        md("## 10. Every method on the test set"),
+        code('''cols = [f"{l}_mean4" for l in ORDER]
+methods = ["market", "base_rate", "recent_hits", "latest_rule", "logistic", "always_0.5"] + cols
+results = score_table(test_df, methods)
+g = scored_subset(test_df)
+results["sd_p"] = [float(g[m].std()) for m in results["method"]]
+results["share_0_or_1"] = [float(((g[m] <= 0.0) | (g[m] >= 1.0)).mean()) for m in results["method"]]
+results.to_csv(f"{OUT_DIR}/test_metrics.csv", index=False)
+results[["method", "n", "brier", "log_loss", "ece", "auc", "mean_p", "sd_p", "share_0_or_1"]]'''),
+        md("## 11. The comparisons fixed in `eval/test_plan.md`, with 95% intervals (resampling whole releases)"),
+        code('''def mean4(labels):
+    return [f"{l}_mean4" for l in labels if l in MODELS]
+
+COMPARISONS = [   # (id, description, reference columns, compared columns)
+    ("P1", "Main setup (runs 4-6) vs untrained, key numbers", mean4(["untrained_keynum"]), mean4(MAIN)),
+    ("P2", "Main setup (runs 4-6) vs std scaling on (runs 3, 9, 10)", mean4(COLLAPSE), mean4(MAIN)),
+    ("S1", "Main setup (runs 4-6) vs logistic regression", ["logistic"], mean4(MAIN)),
+    ("S2", "Untrained: key numbers vs plain prompt", mean4(["untrained_plain"]), mean4(["untrained_keynum"])),
+    ("S3", "Std scaling on (runs 3, 9, 10) vs untrained, key numbers", mean4(["untrained_keynum"]), mean4(COLLAPSE)),
+    ("S4", "Run 7 (plain, std off) vs untrained, plain", mean4(["untrained_plain"]), mean4(["run7"])),
+    ("S5", "Run 1 (plain, std on) vs untrained, plain", mean4(["untrained_plain"]), mean4(["run1"])),
+    ("S6", "Run 8 (shuffled outcomes) vs untrained, key numbers", mean4(["untrained_keynum"]), mean4(["run8"])),
+    ("S7", "Main setup (runs 4-6) vs run 8 (shuffled outcomes)", mean4(["run8"]), mean4(MAIN)),
+]
+for l in MAIN + COLLAPSE + ["run8"]:
+    COMPARISONS.append(("R", f"{l} vs untrained, key numbers", mean4(["untrained_keynum"]), mean4([l])))
+rows = []
+t0 = time.time()
+for cid, desc, a_cols, b_cols in COMPARISONS:
+    if not a_cols or not b_cols:   # a model that wasn't attached (optional run 2 is never compared)
+        continue
+    t = paired_bootstrap_groups(g, a_cols, b_cols, n_boot=N_BOOT, seed=0)
+    rows.append(t.assign(id=cid, comparison=desc, models=len(b_cols)))
+comparisons = pd.concat(rows, ignore_index=True)[["id", "comparison", "models", "metric", "a", "b", "change",
+                                                  "ci_low", "ci_high", "share_better", "b_min", "b_max"]]
+comparisons.to_csv(f"{OUT_DIR}/test_comparisons.csv", index=False)
+print(f"({(time.time() - t0) / 60:.1f} min)")
+show = comparisons[comparisons["metric"].isin(["brier", "log_loss", "ece", "auc"])]
+show.round(4)'''),
+        md("P3: do the std-scaling-on runs collapse onto the latest-result rule again?"),
+        code('''collapse = []
+for l in [x for x in COLLAPSE + MAIN if x in MODELS]:
+    a = answers[(answers["condition"] == l) & answers["market_ticker"].isin(g["market_ticker"])]
+    p = g[f"{l}_mean4"]
+    collapse.append({"model": l, "answers_at_0_or_1": round(float(a["prob"].isin([0.0, 1.0]).mean()), 3),
+                     "same_side_as_latest_rule": round(float(((p >= 0.5) == (g["latest_rule"] >= 0.5)).mean()), 3),
+                     "mean_abs_diff_from_rule": round(float((p - g["latest_rule"]).abs().mean()), 3)})
+collapse = pd.DataFrame(collapse)
+collapse.to_csv(f"{OUT_DIR}/test_collapse.csv", index=False)
+collapse'''),
+        md("By series (Brier) and threshold-ladder consistency:"),
+        code('''series = by_series_table(test_df, ["market", "base_rate", "logistic"] + cols, eval_set="test_econ")
+series.to_csv(f"{OUT_DIR}/test_by_series.csv")
+ladder = pd.DataFrame([{"method": m, **M.ladder_violations(g, m)} for m in ["market"] + cols])
+display(series)
+ladder'''),
+        md("## 12. Summary to paste back"),
+        code('''print("=" * 25, "COPY FROM HERE", "=" * 25)
+print(f"Run {RUN_NAME} | {MODEL_NAME} | repo {COMMIT} | test split | {EVAL_SAMPLES} samples at {EVAL_TEMPERATURE} | seed {SEED}")
+print(f"test: {len(test_df)} questions, {len(g)} scored, {g['event_ticker'].nunique()} releases | models: {ORDER}")
+print()
+print(check_table.to_string(index=False))
+print()
+print(answers.groupby("condition").agg(readable=("prob", lambda s: round(s.notna().mean(), 3)),
+                                       median_tokens=("n_tokens", "median")).loc[ORDER].to_string())
+print()
+print(results[["method", "n", "brier", "log_loss", "ece", "auc", "mean_p", "sd_p", "share_0_or_1"]].to_string(index=False))
+print()
+print(show.round(4).to_string(index=False))
+print()
+print(collapse.to_string(index=False))
+print()
+print(series.to_string())
+print()
+print(ladder.round(3).to_string(index=False))
+print("=" * 25, "COPY TO HERE", "=" * 27)'''),
+    ]
+    nb = nbf.v4.new_notebook()
+    nb.cells = cells
+    nb.metadata = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+                   "language_info": {"name": "python"}}
+    nbf.validate(nb)
+    return nb
+
+
 if __name__ == "__main__":
     for name, build in (("phase2_baselines.ipynb", baselines), ("phase3_grpo_train.ipynb", training),
-                        ("phase2b_prompt_ablation.ipynb", prompt_ablation)):
+                        ("phase2b_prompt_ablation.ipynb", prompt_ablation), ("phase4_test_eval.ipynb", test_eval)):
         out = HERE / name
         nbf.write(build(), out)
         print("wrote", out)
