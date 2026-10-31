@@ -2,7 +2,7 @@
 
 The untrained 3B model, with no training, scored on the 410 validation econ questions under seven prompts. Each shows the series' recent results. The first five add the key-numbers block one line at a time; the last two test alternatives. Same model loading, sampling (4 answers at temperature 0.7, averaged) and seed as every training run. Notebook `notebooks/phase2b_prompt_ablation.ipynb`, repo commit 5e20686, about 64 minutes of generation.
 
-**The two prompts already scored reproduce:** recent results only, Brier 0.272 / AUC 0.519 (run 1's untrained answers: 0.272 / 0.520); full key numbers, 0.200 / 0.759 (run 3's: 0.201 / 0.757). The forecasts correlate 1.00 and 0.98 with the earlier ones.
+**The two prompts already scored reproduce:** recent results only, Brier 0.272 / AUC 0.519 (run 1's untrained answers: 0.272 / 0.520); full key numbers, 0.200 / 0.759 (run 3's: 0.201 / 0.757). The forecasts correlate 1.00 and 0.98 with the earlier ones, and 88% of the full-block answers are word for word the same. The ablation is its own generation batch: comparisons among its prompts use it, and every other comparison with the untrained model uses the earlier answers.
 
 ![Prompt ablation](figures/prompt_ablation.png)
 
@@ -10,18 +10,18 @@ The untrained 3B model, with no training, scored on the 410 validation econ ques
 
 | Prompt | Brier (95% interval) | AUC (95% interval) | Calibration error | Readable answers |
 | --- | --- | --- | --- | --- |
-| Recent results only | 0.272 (0.248 to 0.298) | 0.519 (0.441 to 0.598) | 0.120 | 98% |
-| + the YES rule | 0.251 (0.222 to 0.288) | 0.612 (0.517 to 0.698) | 0.102 | 98% |
-| + latest result vs threshold | 0.244 (0.197 to 0.299) | 0.671 (0.562 to 0.772) | 0.121 | 98% |
-| **+ count of recent results that would resolve YES** | **0.190** (0.155 to 0.229) | **0.789** (0.714 to 0.860) | **0.055** | 97% |
-| + change and range (full key numbers) | 0.200 (0.169 to 0.240) | 0.759 (0.671 to 0.840) | 0.066 | 98% |
-| YES rule + count only | 0.221 (0.191 to 0.252) | 0.712 (0.643 to 0.783) | 0.108 | 96% |
-| Estimate the number first, no key numbers | 0.280 (0.253 to 0.310) | 0.522 (0.447 to 0.599) | 0.155 | 92% |
+| Recent results only | 0.272 (0.244 to 0.305) | 0.519 (0.424 to 0.604) | 0.120 | 98% |
+| + the YES rule | 0.251 (0.220 to 0.297) | 0.612 (0.502 to 0.702) | 0.102 | 98% |
+| + latest result vs threshold | 0.244 (0.203 to 0.296) | 0.671 (0.554 to 0.761) | 0.121 | 98% |
+| **+ count of recent results that would resolve YES** | **0.190** (0.168 to 0.219) | **0.789** (0.737 to 0.840) | **0.055** | 97% |
+| + change and range (full key numbers) | 0.200 (0.173 to 0.240) | 0.759 (0.679 to 0.833) | 0.066 | 98% |
+| YES rule + count only | 0.221 (0.196 to 0.247) | 0.712 (0.662 to 0.775) | 0.108 | 96% |
+| Estimate the number first, no key numbers | 0.280 (0.250 to 0.317) | 0.522 (0.446 to 0.601) | 0.155 | 92% |
 | *Logistic regression on key numbers* | *0.163* | *0.855* | *0.087* | |
 | *Counting rule* | *0.168* | *0.846* | *0.121* | |
 | *Base rate* | *0.243* | *0.577* | *0.042* | |
 
-Intervals resample whole releases (4,000 draws), `analysis/prompt_ablation_scores.csv`. Announcement-level versions of the paired differences (series released together resampled together) are in `analysis/announcement_intervals_extra.csv`; they change one conclusion, noted in finding 4. Paired differences (2,000 draws, `analysis/prompt_ablation_bootstrap.csv`):
+Intervals for each prompt's own score resample whole announcements (4,000 draws; the first version resampled releases), `analysis/prompt_ablation_scores.csv`. Announcement-level versions of the paired differences (series released together resampled together) are in `analysis/announcement_intervals_extra.csv`; they change one conclusion, noted in finding 4. Paired differences (2,000 draws, `analysis/prompt_ablation_bootstrap.csv`):
 
 | Comparison | Brier change | AUC change |
 | --- | --- | --- |

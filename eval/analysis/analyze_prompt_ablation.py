@@ -1,4 +1,5 @@
-"""Prompt ablation (untrained 3B, validation econ): each prompt's Brier and AUC with 95% intervals,
+"""Prompt ablation (untrained 3B, validation econ): each prompt's Brier and AUC with 95% intervals
+(resampling whole announcements, as for the paired comparisons; the first version resampled releases),
 a reproducibility check against the untrained answers from runs 1 and 3, and per-series AUC.
 
 Usage: python -I eval/analysis/analyze_prompt_ablation.py <repo_dir> <data_dir> <out_dir>
@@ -43,8 +44,8 @@ for v, old in (("plain", "run1_plain"), ("full", "run3_full")):
                 "share_identical_answers": identical_share(v, "eval_answers_v1.csv" if v == "plain" else "eval_answers_run3.csv")}
 
 rng = np.random.default_rng(0)
-events = ev["event_ticker"].unique()
-idx = {e: np.flatnonzero(ev["event_ticker"].to_numpy() == e) for e in events}
+events = ev["announcement"].unique()
+idx = {e: np.flatnonzero(ev["announcement"].to_numpy() == e) for e in events}
 y = ev["outcome"].to_numpy()
 rows = []
 cols = VARIANTS + ["logistic", "recent_hits", "base_rate"]

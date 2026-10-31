@@ -16,7 +16,7 @@
 > - **The plain prompt elicits little discrimination.** The untrained model scores AUC 0.52, while counting how many recent results would have resolved YES reaches 0.85. A deterministic "key numbers" block that spells out the comparison lifts it to 0.76 with no training. A prompt ablation traces most of the gain to restating the YES condition and the count ([`eval/prompt_ablation.md`](eval/prompt_ablation.md)).
 > - **Among the configurations tested, only the key-numbers prompt with std scaling off improved both Brier and AUC** (one pass of training). Over three seeds: Brier −0.031 (95% interval −0.045 to −0.016), AUC +0.070 (+0.036 to +0.119), with no detectable change in calibration error. With outcomes shuffled, the same setup gets worse ([`eval/rl_runs5to7.md`](eval/rl_runs5to7.md), [`eval/rl_run8.md`](eval/rl_run8.md)).
 > - **With std scaling on, RL collapses onto a lookup rule.** In all three seeds, near-certain answers pass 90% by about step 130 of 347. More than 98% of evaluation answers end up exactly 0 or 1, matching the rule "has the latest result already crossed the threshold?" Under the training reward itself, that rule scores worse than its calibrated version ([`eval/rl_runs9_10.md`](eval/rl_runs9_10.md)).
-> - **Without usable evidence or a real signal, forecasts contract toward a constant**, consistent with hedging when the evidence isn't used.
+> - **With std scaling off, the plain-prompt and shuffled-outcome runs contract toward a constant**, consistent with hedging when the evidence isn't used. With it on, the one-pass plain-prompt run mainly lowered its average forecast.
 > - **Against simple models:** the trained models don't outperform a logistic regression or the counting rule on the same features (intervals include 0), and trail gradient-boosted trees on AUC (−0.03 to −0.04; on test −0.01 to −0.02, not resolved). The market price (never shown to the model) is far ahead: Brier 0.062 against 0.170. No useful discrimination on the weather brackets ([`eval/extra_analyses.md`](eval/extra_analyses.md), [`eval/review_checks.md`](eval/review_checks.md)).
 
 ![Spread of stated probabilities during training: std scaling on vs off, plain prompt vs key numbers](eval/figures/spread_2x2.png)
@@ -42,7 +42,7 @@
 | What | Where |
 | --- | --- |
 | Untrained baselines (1B and 3B) | [`eval/baselines.md`](eval/baselines.md) |
-| Run 1 (plain prompt): a level shift, not better ordering | [`eval/rl_run1.md`](eval/rl_run1.md) |
+| Run 1 (plain prompt): a lower average forecast, not better ordering | [`eval/rl_run1.md`](eval/rl_run1.md) |
 | Runs 2-3: overconfidence, and the first collapse | [`eval/rl_run2_run3.md`](eval/rl_run2_run3.md) |
 | Run 4: std scaling off | [`eval/rl_run4.md`](eval/rl_run4.md) |
 | Runs 5-7: three seeds and the full 2 × 2 | [`eval/rl_runs5to7.md`](eval/rl_runs5to7.md) |

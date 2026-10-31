@@ -1,5 +1,5 @@
 """Prompt ablation figure: AUC and Brier of the untrained 3B under each prompt (validation econ),
-with 95% event-level bootstrap intervals, against the simple rules on the same evidence.
+with 95% bootstrap intervals resampling whole announcements, against the simple rules on the same evidence.
 
 Usage: python eval/analysis/plot_prompt_ablation.py eval/analysis/prompt_ablation_scores.csv
 Writes eval/figures/prompt_ablation.png.
@@ -32,7 +32,7 @@ def main(path):
     ys = [y + (0.6 if i < 5 else 0) for i, y in enumerate(ys)]
     for ax, (metric, title, refs, xlim) in zip(axes, [
         ("auc", "AUC (higher is better)", [("logistic", "logistic"), (0.5, "no ordering")], (0.4, 0.95)),
-        ("brier", "Brier score (lower is better)", [("logistic", "logistic"), ("base_rate", "base rate")], (0.14, 0.31)),
+        ("brier", "Brier score (lower is better)", [("logistic", "logistic"), ("base_rate", "base rate")], (0.14, 0.335)),
     ]):
         ax.set_facecolor(SURFACE)
         ax.grid(axis="x", color=GRID, lw=0.8)
@@ -57,12 +57,13 @@ def main(path):
         ax.tick_params(axis="y", length=0)
     axes[0].set_yticks(ys)
     axes[0].set_yticklabels([label for _, label in ORDER], color=INK)
-    fig.suptitle("Untrained 3B on 410 validation econ questions: the YES rule, the latest result and the count do the work",
+    fig.suptitle("Untrained 3B on 410 validation econ questions, as the key-number lines are added one at a time",
                  x=0.01, ha="left", fontsize=12, color=INK)
-    fig.text(0.01, 0.01, "Each prompt shows the recent results; the first five add key-number lines one at a time. "
-             "Dots: 4 answers averaged per question. Lines: 95% intervals, resampling whole releases.",
+    fig.text(0.01, 0.01, "Each prompt shows the recent results; the first five rows add key-number lines one at a time. "
+             "Dots: 4 answers averaged per question.\nLines: 95% intervals for each prompt's own score, resampling whole announcements "
+             "(paired differences between prompts are in the text).",
              fontsize=8.5, color=MUTED)
-    fig.tight_layout(rect=(0, 0.04, 1, 0.93))
+    fig.tight_layout(rect=(0, 0.07, 1, 0.93))
     out = os.path.join(os.path.dirname(__file__), "..", "figures", "prompt_ablation.png")
     fig.savefig(out, dpi=160, facecolor=SURFACE)
     print("wrote", os.path.abspath(out))

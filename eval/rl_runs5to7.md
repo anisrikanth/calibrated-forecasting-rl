@@ -15,7 +15,7 @@ Runs 5 and 6 repeat run 4 (key numbers, GRPO std scaling off) with training seed
 
 | | GRPO std scaling on | GRPO std scaling off |
 | --- | --- | --- |
-| **Plain prompt** (untrained: Brier 0.272, AUC 0.520) | Run 1: 0.267 / 0.544. Forecasts shift down 0.06; ordering unchanged | Run 7: 0.263 / 0.485. Forecasts squeeze toward 0.56; ordering unchanged |
+| **Plain prompt** (untrained: Brier 0.272, AUC 0.520) | Run 1: 0.267 / 0.544. Average forecast down 0.06; ordering unchanged | Run 7: 0.263 / 0.485. Forecasts squeeze toward 0.56; ordering unchanged |
 | **Key numbers** (untrained: 0.201 / 0.757) | Run 3: 0.223 / 0.771. Collapse onto the latest-result rule, all answers 0 or 1 | **Runs 4 to 6: 0.170 / 0.827** (3 seeds). Better ordering, calibration kept |
 
 Cells show Brier / AUC. Only the bottom-right cell improves on its untrained model in both.

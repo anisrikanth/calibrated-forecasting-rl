@@ -14,7 +14,7 @@ Collected as they're found, with how much each one matters.
 
 ## Evaluation
 
-- **Development used one validation split** (36 releases). Settings were chosen by looking at it, so final numbers come from the untouched test split, evaluated once (`eval/test_results.md`). The test split also has only 13 announcements, and in its five months the recent results were more informative than on validation.
+- **Development used one validation split** (36 releases). Settings were chosen by looking at it, so final numbers come from the untouched test split, evaluated once (`eval/test_results.md`). The test split also has only 13 announcements, and in its five months methods that read the recent results scored better than on validation.
 - **Few releases per series** (3 to 5 in validation), so per-series results are descriptive only.
 - **In-training curves are not forward tests.** TRL reshuffles the training questions every pass, so the model can be rewarded on a later release before seeing an earlier one.
 
