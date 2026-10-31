@@ -1,0 +1,4 @@
+model,answers,answers_at_0_or_1,threshold_answers,answers_equal_to_rule,answers_at_0_or_1_threshold_questions_only,meets_both,failed_loading_check,reading
+run3,1916,0.9984342379958246,1856,0.9983836206896551,0.9983836206896551,True,False,holds
+run9,1916,0.9953027139874739,1856,0.9897629310344828,0.9973060344827587,True,False,holds
+run10,1916,0.9932150313152401,1856,0.9509698275862069,0.9946120689655172,True,False,holds

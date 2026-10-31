@@ -1,0 +1,12 @@
+model,questions,answers,identical_text,mean_abs_diff,corr,status,minutes
+untrained_keynum,80,320,0.866,0.0171,0.989,match,1.9
+run4,80,320,0.928,0.005,0.999,match,2.7
+run5,80,320,0.941,0.0051,0.999,match,2.7
+run6,80,320,0.903,0.0085,0.998,match,2.6
+run3,80,320,1.0,0.0,1.0,match,1.4
+run9,80,320,0.934,0.0031,0.998,match,2.8
+run10,80,320,0.981,0.0031,0.998,match,2.0
+untrained_plain,80,320,0.828,0.0263,0.952,match,1.9
+run1,80,320,0.9,0.0147,0.979,match,3.1
+run7,80,320,0.884,0.0059,0.978,match,3.2
+run8,80,320,0.872,0.007,0.981,match,3.3

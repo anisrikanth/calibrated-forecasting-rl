@@ -116,7 +116,7 @@ All runs used Kaggle's free tier: one NVIDIA T4 (16 GB) per session. Money spent
 | Prompt ablation | 1.1 hours |
 | Setup, about 12 sessions | about 2.5 hours |
 | Phase 0 smoke test and Phase 2 baselines (estimated) | about 1.5 hours |
-| **Total so far** | **about 27 GPU-hours** |
-| Test-set evaluation (planned) | about 3 hours |
+| Test-set evaluation: a run of the loading check alone, then the scored run | about 0.7 and 2.8 hours |
+| **Total** | **about 30 GPU-hours** |
 
 A full pass of GRPO training (347 steps, 1,391 questions, 4 answers each) takes 1.3 to 2.1 hours on one T4. Runs whose answers shrink to a few tokens are the fast end.

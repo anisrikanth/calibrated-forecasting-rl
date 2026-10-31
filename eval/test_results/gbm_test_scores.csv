@@ -1,0 +1,11 @@
+eval_set,method,brier,log_loss,ece,auc,mean_p
+test_econ,market,0.0731,0.2361,0.0379,0.9666,0.424
+test_econ,gbm_series,0.125,0.3839,0.0641,0.9055,0.4086
+test_econ,gbm,0.1271,0.3932,0.0458,0.9014,0.407
+test_econ,logistic,0.1298,0.3998,0.0571,0.8993,0.4023
+test_econ,recent_hits,0.1378,0.461,0.0591,0.8803,0.4186
+test_econ,latest_rule,0.1929,0.8888,0.188,0.8036,0.4301
+test_econ,base_rate,0.2472,0.6873,0.0853,0.5544,0.4945
+test_econ,run4_mean4,0.1346,0.4184,0.0524,0.8858,0.4392
+test_econ,run5_mean4,0.1375,0.4351,0.0815,0.8919,0.4699
+test_econ,run6_mean4,0.1463,0.4589,0.0942,0.8878,0.5001

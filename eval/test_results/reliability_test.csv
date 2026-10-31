@@ -1,0 +1,41 @@
+panel,bin_low,bin_high,count,mean_forecast,frac_yes
+"Untrained, key numbers",0.0,0.1,25,0.0661,0.0
+"Untrained, key numbers",0.1,0.2,29,0.1477,0.069
+"Untrained, key numbers",0.2,0.3,69,0.2549,0.029
+"Untrained, key numbers",0.3,0.4,58,0.3511,0.1724
+"Untrained, key numbers",0.4,0.5,66,0.4462,0.3333
+"Untrained, key numbers",0.5,0.6,53,0.5478,0.4717
+"Untrained, key numbers",0.6,0.7,55,0.6576,0.7455
+"Untrained, key numbers",0.7,0.8,70,0.7468,0.6857
+"Untrained, key numbers",0.8,0.9,41,0.8325,0.8049
+"Untrained, key numbers",0.9,1.0,13,0.9303,1.0
+"Runs 4-6 (std off), pooled",0.0,0.1,177,0.0656,0.0
+"Runs 4-6 (std off), pooled",0.1,0.2,198,0.148,0.0202
+"Runs 4-6 (std off), pooled",0.2,0.3,159,0.2499,0.0943
+"Runs 4-6 (std off), pooled",0.3,0.4,118,0.3475,0.2627
+"Runs 4-6 (std off), pooled",0.4,0.5,107,0.4475,0.4486
+"Runs 4-6 (std off), pooled",0.5,0.6,114,0.5556,0.5263
+"Runs 4-6 (std off), pooled",0.6,0.7,124,0.6508,0.6613
+"Runs 4-6 (std off), pooled",0.7,0.8,182,0.7496,0.6978
+"Runs 4-6 (std off), pooled",0.8,0.9,183,0.8473,0.8415
+"Runs 4-6 (std off), pooled",0.9,1.0,75,0.9322,0.8933
+"Runs 3, 9, 10 (std on), pooled",0.0,0.1,776,0.0003,0.1327
+"Runs 3, 9, 10 (std on), pooled",0.1,0.2,1,0.1275,1.0
+"Runs 3, 9, 10 (std on), pooled",0.2,0.3,17,0.2504,0.4118
+"Runs 3, 9, 10 (std on), pooled",0.3,0.4,1,0.375,1.0
+"Runs 3, 9, 10 (std on), pooled",0.4,0.5,2,0.465,0.0
+"Runs 3, 9, 10 (std on), pooled",0.5,0.6,10,0.5,0.7
+"Runs 3, 9, 10 (std on), pooled",0.6,0.7,1,0.6375,0.0
+"Runs 3, 9, 10 (std on), pooled",0.7,0.8,18,0.7524,0.5556
+"Runs 3, 9, 10 (std on), pooled",0.8,0.9,3,0.8217,0.3333
+"Runs 3, 9, 10 (std on), pooled",0.9,1.0,608,1.0,0.7533
+Logistic regression,0.0,0.1,153,0.0309,0.0131
+Logistic regression,0.1,0.2,42,0.1447,0.2143
+Logistic regression,0.2,0.3,51,0.2349,0.2941
+Logistic regression,0.3,0.4,25,0.354,0.48
+Logistic regression,0.4,0.5,17,0.4502,0.6471
+Logistic regression,0.5,0.6,23,0.5502,0.4783
+Logistic regression,0.6,0.7,23,0.657,0.7826
+Logistic regression,0.7,0.8,46,0.7514,0.6739
+Logistic regression,0.8,0.9,38,0.8602,0.8158
+Logistic regression,0.9,1.0,61,0.9572,0.918

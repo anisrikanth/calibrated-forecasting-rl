@@ -1,0 +1,7 @@
+model,answers_at_0_or_1,answers_equal_to_rule,same_side_as_latest_rule,mean_abs_diff_from_rule,threshold_questions
+run3,0.998,0.998,1.0,0.0,464
+run9,0.995,0.99,0.996,0.008,464
+run10,0.993,0.951,0.944,0.046,464
+run4,0.005,0.005,0.963,0.217,464
+run5,0.0,0.0,0.961,0.242,464
+run6,0.007,0.008,0.929,0.267,464

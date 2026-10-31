@@ -15,6 +15,7 @@ Results so far:
 - `extra_analyses.md`: training diagnostics, gradient-boosted-tree baselines, Brier skill scores, compute used
 - `review_checks.md`: checks added after outside review (announcement-level intervals, aggregation rule, timing audit, single answers, ladders, calibration slope)
 - `test_plan.md`: the comparisons fixed in advance for the one evaluation on the test split
+- `test_results.md`: that evaluation: all three predictions held; secondary comparisons, checks and exploratory notes (`test_results/` holds every answer and table)
 - `answers/`: each model's validation answers (probability and a fingerprint of the text), used to check saved adapters load correctly
 - `analysis/`: the scripts and tables behind them; `figures/`: the plots
 

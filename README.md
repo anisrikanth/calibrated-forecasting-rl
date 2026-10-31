@@ -1,6 +1,6 @@
 # Calibrated Forecasting with RL
 
-**When does RL with a proper scoring rule help a small language model forecast?** We train Llama 3.2 3B Instruct with GRPO and a Brier-score reward on resolved [Kalshi](https://kalshi.com) markets about U.S. economic releases. The evidence in every prompt is held fixed: the series' recent results, all public before the question. That lets us measure what RL changes against simple rules built from the same numbers. Paper draft: [`paper/`](paper/) (test-set section pending).
+**When does RL with a proper scoring rule help a small language model forecast?** We train Llama 3.2 3B Instruct with GRPO and a Brier-score reward on resolved [Kalshi](https://kalshi.com) markets about U.S. economic releases. The evidence in every prompt is held fixed: the series' recent results, all public before the question. That lets us measure what RL changes against simple rules built from the same numbers. Paper draft: [`paper/`](paper/).
 
 ## Research questions
 
@@ -10,13 +10,14 @@
 4. **Transfer.** Does anything carry over to a domain it never trained on (daily temperature markets)?
 5. **Reward hacking.** What shortcuts appear during training, and what measurements catch them?
 
-> **Preliminary findings** (validation split: 410 questions, 13 announcements; intervals resample whole announcements; the test split is scored once, against comparisons fixed in advance in [`eval/test_plan.md`](eval/test_plan.md))
+> **Findings** (validation split: 410 questions, 13 announcements; intervals resample whole announcements)
 >
+> - **Held on the test split.** The newest 479 questions (13 announcements, June to October 2026) were scored once, against three predictions committed in advance ([`eval/test_plan.md`](eval/test_plan.md)). All three held: against the untrained model, the main setup's Brier changed by −0.025 (−0.034 to −0.016) and its AUC by +0.033 (+0.018 to +0.054); it beat the std-on runs in log loss and calibration error; and the std-on runs collapsed again ([`eval/test_results.md`](eval/test_results.md)).
 > - **The plain prompt elicits little discrimination.** The untrained model scores AUC 0.52, while counting how many recent results would have resolved YES reaches 0.85. A deterministic "key numbers" block that spells out the comparison lifts it to 0.76 with no training. A prompt ablation traces most of the gain to restating the YES condition and the count ([`eval/prompt_ablation.md`](eval/prompt_ablation.md)).
 > - **Among the configurations tested, only the key-numbers prompt with std scaling off improved both Brier and AUC** (one pass of training). Over three seeds: Brier −0.031 (95% interval −0.045 to −0.016), AUC +0.070 (+0.036 to +0.119), with no detectable change in calibration error. With outcomes shuffled, the same setup gets worse ([`eval/rl_runs5to7.md`](eval/rl_runs5to7.md), [`eval/rl_run8.md`](eval/rl_run8.md)).
 > - **With std scaling on, RL collapses onto a lookup rule.** In all three seeds, near-certain answers pass 90% by about step 130 of 347. More than 98% of evaluation answers end up exactly 0 or 1, matching the rule "has the latest result already crossed the threshold?" Under the training reward itself, that rule scores worse than its calibrated version ([`eval/rl_runs9_10.md`](eval/rl_runs9_10.md)).
 > - **Without usable evidence or a real signal, forecasts contract toward a constant**, consistent with hedging when the evidence isn't used.
-> - **Against simple models:** the trained models don't outperform a logistic regression or the counting rule on the same features (intervals include 0), and trail gradient-boosted trees on AUC (−0.03 to −0.04). The market price (never shown to the model) is far ahead: Brier 0.062 against 0.170. No useful discrimination on the weather brackets ([`eval/extra_analyses.md`](eval/extra_analyses.md), [`eval/review_checks.md`](eval/review_checks.md)).
+> - **Against simple models:** the trained models don't outperform a logistic regression or the counting rule on the same features (intervals include 0), and trail gradient-boosted trees on AUC (−0.03 to −0.04; on test −0.01 to −0.02, not resolved). The market price (never shown to the model) is far ahead: Brier 0.062 against 0.170. No useful discrimination on the weather brackets ([`eval/extra_analyses.md`](eval/extra_analyses.md), [`eval/review_checks.md`](eval/review_checks.md)).
 
 ![Spread of stated probabilities during training: std scaling on vs off, plain prompt vs key numbers](eval/figures/spread_2x2.png)
 
@@ -50,6 +51,7 @@
 | Prompt ablation | [`eval/prompt_ablation.md`](eval/prompt_ablation.md) |
 | Training diagnostics, tree baselines, skill scores, compute | [`eval/extra_analyses.md`](eval/extra_analyses.md) |
 | Test-set plan (fixed before scoring) | [`eval/test_plan.md`](eval/test_plan.md) |
+| Test-set results (scored once) | [`eval/test_results.md`](eval/test_results.md) |
 | Reward hacks and parser issues | [`writeup/hacks.md`](writeup/hacks.md) |
 | Limitations and data quirks | [`writeup/limitations.md`](writeup/limitations.md) |
 
@@ -59,8 +61,8 @@
 - [x] Phase 1: Kalshi data pipeline (14,662 markets, 10 series), context snapshots, leakage audit, date-based splits
 - [x] Phase 2: forecasting environment, baselines and leak probe (`eval/baselines.md`)
 - [x] Phase 3: GRPO training and reward-hacking log. Runs 1-10 done (`eval/rl_run1.md`, `eval/rl_run2_run3.md`, `eval/rl_run4.md`, `eval/rl_runs5to7.md`): the full prompt × std-scaling 2 × 2 and three seeds of the main setup; 5 entries in `writeup/hacks.md`; shuffled-outcome control (run 8, `eval/rl_run8.md`); prompt ablation (`eval/prompt_ablation.md`); two more seeds of the collapse (runs 9 and 10, `eval/rl_runs9_10.md`) reproduce it
-- [ ] Phase 4: one evaluation on the untouched test split, with the comparisons fixed in advance in `eval/test_plan.md` (`notebooks/phase4_test_eval.ipynb`); extra analyses done (`eval/extra_analyses.md`: training diagnostics, tree baselines, skill scores, compute)
-- [ ] Phase 5: write-up. First full draft in `paper/` (test-set section pending)
+- [x] Phase 4: one evaluation on the untouched test split, with the comparisons fixed in advance in `eval/test_plan.md` (`notebooks/phase4_test_eval.ipynb`): all three predictions held (`eval/test_results.md`); extra analyses (`eval/extra_analyses.md`: training diagnostics, tree baselines, skill scores, compute)
+- [ ] Phase 5: write-up. Full draft with test results in `paper/`; outside review, then arXiv
 
 ## Repository layout
 
