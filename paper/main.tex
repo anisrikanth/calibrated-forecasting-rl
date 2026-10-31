@@ -15,6 +15,7 @@
 \usepackage{enumitem}
 \usepackage{float}
 \usepackage{tabularx}
+\usepackage{needspace}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
 
@@ -39,12 +40,12 @@ We study whether reinforcement learning with a Brier-score reward improves how a
 
 Several groups now train language models to forecast with reinforcement learning, rewarding them with a proper scoring rule on questions whose outcomes are known \citep{turtel2025outcome,turtel2026proper,chandak2025scaling,afifi2026research,ye2026alphabet,han2026futureworld}. The headline metric is usually the Brier score, and it usually improves. But a Brier score improvement can come from different sources. It can come from correcting the average probability without improving the ordering of the forecasts \citep{vancalster2016hierarchy}. The spread of the forecasts can change. Or the model can put higher probabilities on the questions that resolve YES, which is discrimination; we measure it separately with AUC. Most of these systems also retrieve news or search the web, so a gain can come from better searching, better reading or better forecasting. Among the forecasting studies we reviewed, one reports discrimination for the trained model. There, a Brier reward improved the Brier score from 0.186 to 0.165 but AUC only from 0.725 to 0.751 \citep{turtel2026proper}.
 
-We ask a narrower question in a setting built to answer it: \emph{with the evidence held fixed, does proper-score RL improve how a small model uses that evidence?} Kalshi's markets on scheduled economic releases suit this well. Every question has a numeric threshold (``Will CPI rise by more than 0.3\% in May?''), and every series has a history of comparable past results. That history lets us build the evidence from public data with settlement timestamps, so nothing the model sees postdates the question. It also lets us write simple rules over the same evidence as baselines, and the market price at question time gives a strong external benchmark that the model never sees.
+We ask a narrower question in a setting built to answer it: \emph{with the evidence held fixed, does proper-score RL improve how a small model uses that evidence?} Kalshi's markets on scheduled economic releases suit this well. Most questions have a numeric threshold (``Will CPI rise by more than 0.3\% in May?''); the exception is the Fed's rate decision (cut, hold or hike). Every series has a history of comparable past results. That history lets us build the evidence from public data with settlement timestamps, so nothing the model sees postdates the question. It also lets us write simple rules over the same evidence as baselines, and the market price at question time gives a strong external benchmark that the model never sees.
 
 We train Llama~3.2~3B Instruct \citep{grattafiori2024llama3} with GRPO \citep{shao2024deepseekmath} and a Brier reward on 1,391 questions from 2024 and 2025, and evaluate on 410 questions from 2026. Ten training runs cross two prompts with two settings of GRPO's advantage scaling, repeat the key-numbers conditions over three seeds, and add a shuffled-outcome control. Our main findings on the validation split:
 
 \begin{enumerate}[leftmargin=*]
-\item \textbf{The plain prompt elicits little discrimination; stating the comparisons explicitly substantially improves it.} With six recent results in the prompt, the untrained model scores worse than always saying 0.5 (AUC 0.52), while a counting rule over the same numbers reaches AUC 0.85. A deterministic ``key numbers'' block raises the untrained model's AUC to 0.76. An ablation traces the gain mainly to restating the YES condition and counting the recent results that would have resolved YES (\S\ref{sec:elicitation}).
+\item \textbf{The plain prompt elicits little discrimination; stating the comparisons explicitly substantially improves it.} With six recent results in the prompt, the untrained model has Brier 0.272, worse than the constant-0.5 baseline's 0.250, and near-chance AUC of 0.52, while a counting rule over the same numbers reaches AUC 0.85. A deterministic ``key numbers'' block raises the untrained model's AUC to 0.76. An ablation traces the gain mainly to restating the YES condition and counting the recent results that would have resolved YES (\S\ref{sec:elicitation}).
 \item \textbf{Among the configurations tested, only the key-numbers prompt with std scaling disabled improved both Brier score and AUC} under our one-pass training budget: $-0.031$ and $+0.070$ averaged over three seeds (test: $-0.025$ and $+0.033$), with no detectable change in calibration error. With outcomes shuffled, the same setup gets worse, so the improvement depends on the real association between inputs and outcomes (\S\ref{sec:twobytwo}).
 \item \textbf{With GRPO's default scaling, RL collapses onto a lookup rule.} In all three seeds, the share of near-certain answers passes 90\% within about 140 steps. More than 98\% of evaluation answers end up exactly 0 or 1, on validation and on test, matching a one-cue rule: ``1 if the latest result already satisfies the question, else 0.'' Under the training reward itself, this rule scores worse than the same rule stated at its hit rates (average Brier term 0.847 vs 0.870, excluding the $+0.5$ format bonus that every readable answer gets). \citet{bereket2025uncalibrated} identified this overconfidence from std scaling and showed that removing it corrects it. We add its appearance with a Brier reward on real economic forecasting questions, its interaction with how the evidence is presented, and collapse onto an identifiable heuristic in every seed (\S\ref{sec:collapse}).
 \item \textbf{The trained models do not outperform simple models on the same features.} The best runs neither beat nor clearly trail a logistic regression on five key-number features and the counting rule (intervals include 0). They trail gradient-boosted trees on AUC by 0.03 to 0.04 on validation; on the test split that gap is smaller and not resolved. The market is far ahead of everything, with Brier 0.062 (\S\ref{sec:simple}).
@@ -197,7 +198,7 @@ Run 8: key numbers, std off, shuffled outcomes & 0.236 & 0.665 & 0.113 & 0.708 \
 \subsection{The plain prompt elicits little discrimination}
 \label{sec:elicitation}
 
-With the plain prompt, the untrained 3B model scores Brier 0.272 and AUC 0.520 (Table~\ref{tab:main}). That is worse than always saying 0.5, and worse than its own score with the recent results removed (0.253). The evidence itself is usable: the counting rule over the same six numbers scores 0.168 and AUC 0.846. The model's reasoning and its final probability often disagree, and 48\% of adjacent threshold pairs in a ladder are ordered the wrong way (Appendix~\ref{app:diag}).
+With the plain prompt, the untrained 3B model scores Brier 0.272 and AUC 0.520 (Table~\ref{tab:main}). Its Brier score is worse than always saying 0.5 (0.250), and worse than its own with the recent results removed (0.253). The evidence itself is usable: the counting rule over the same six numbers scores 0.168 and AUC 0.846. The model's reasoning and its final probability often disagree, and 48\% of adjacent threshold pairs in a ladder are ordered the wrong way (Appendix~\ref{app:diag}).
 
 The key-numbers block raises the untrained model's AUC from 0.520 to 0.757 (+0.237, interval +0.189 to +0.312) and lowers its Brier score to 0.201, the first model setting to beat the base rate. Figure~\ref{fig:ablation} reveals the block one line at a time, still with no training. The intervals below resample announcements.
 \begin{itemize}[leftmargin=*]
@@ -244,7 +245,7 @@ Key numbers \newline {\scriptsize untrained 0.201 / 0.757} & Runs 3, 9, 10: 0.21
 \label{fig:spread}
 \end{figure}
 
-\paragraph{Without the key numbers, one pass of RL moved the average or the spread, not the ordering.}
+\paragraph{Without the key numbers, one pass of RL changed the average or spread without establishing improved discrimination.}
 \begin{itemize}[leftmargin=*]
 \item \textbf{Run 1} lowered the average forecast by about 0.06 on both evaluation sets, though not uniformly: on validation, 270 of its 410 forecasts fell and 135 rose. On held-out weather, where one bracket in six resolves YES, its Brier score improved (0.286 to 0.254; $-0.032$, $-0.055$ to $-0.007$). But the untrained model's forecasts shifted down uniformly by the same average amount score better (0.242), and AUC did not improve.
 \item \textbf{Run 2}, with twice the training at twice the learning rate, raised AUC from 0.52 to 0.69. But 72\% of its forecasts became near-certain and its Brier score got worse (0.320).
@@ -350,7 +351,7 @@ We find no useful discrimination on the evaluated weather brackets under this ev
 \subsection{Test set}
 \label{sec:test}
 
-After all development, eleven models were scored once on the test split: the untrained model with each prompt, and runs 1 and 3 to 10 (run 2, optional in the plan, was not scored). The split has 479 priced questions from 36 releases and 13 announcements, June to October 2026 (yes-rate 0.409). The model comparisons, the rules for reading them and the code that applies those rules were committed to the repository before any model was scored on the test split (\texttt{eval/test\_plan.md}). No model was retrained. Each run's saved adapter was loaded unchanged, and before any test question every model re-answered 80 validation questions and reproduced its stored answers (83\% to 100\% of them word for word). The test questions were not entirely unseen: dry runs of the evaluation code, with made-up model answers, computed the baselines on them, starting before the plan's first commit. No language model was scored on them before the final run; Appendix~\ref{app:timeline} gives the timeline. We fixed three predictions:
+After all development, eleven models were scored once on the test split: the untrained model with each prompt, and runs 1 and 3 to 10 (run 2, optional in the plan, was not scored). The split has 479 priced questions from 36 releases and 13 announcements, June to October 2026 (yes-rate 0.409). The model comparisons, the rules for reading them and the code that applies those rules were committed to the repository before any language model was scored on the test split (\texttt{eval/test\_plan.md}). No model was retrained. Each run's saved adapter was loaded unchanged, and before any test question every model re-answered 80 validation questions and reproduced its stored answers (83\% to 100\% of them word for word). The test questions were not entirely unseen: dry runs of the evaluation code, with made-up model answers, computed the baselines on them, starting before the plan's first commit. No language model was scored on them before the final run; Appendix~\ref{app:timeline} gives the timeline. We fixed three predictions:
 \begin{itemize}[leftmargin=*]
 \item \textbf{P1:} runs 4--6 improve on the untrained model with the same prompt, in Brier score and, as a separate conclusion, in AUC.
 \item \textbf{P2:} runs 4--6 beat runs 3, 9 and 10 in both log loss and calibration error.
@@ -454,6 +455,7 @@ We hope the controls used here become standard in RL-for-forecasting work: rules
 \bibliographystyle{plainnat}
 \bibliography{refs}
 
+\clearpage
 \appendix
 
 \section{Prompt}
@@ -682,7 +684,7 @@ On payrolls, the base rate (0.242) beats every method, including the market.
 \label{fig:reliability_test}
 \end{figure}
 
-\clearpage
+\needspace{0.62\textheight}
 \section{Test-split timeline}
 \label{app:timeline}
 
@@ -739,7 +741,7 @@ Untrained, plain prompt & $-0.119$ & $-0.070$ & $-1.060$ \\
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\linewidth]{figures/probability_histograms.png}
+\includegraphics[width=0.88\linewidth]{figures/probability_histograms.png}
 \caption{Stated probabilities in the first and last 512 training answers of each run (seeds pooled).}
 \label{fig:hist}
 \end{figure}

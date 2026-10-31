@@ -31,7 +31,7 @@ Consistency (val_econ ladders: 362 adjacent threshold pairs; weather: 60 days of
 
 ### What it shows
 
-- **The base model has no forecasting skill yet.** It is worse than always saying 0.5 on economic questions and twice as bad as the base rate on weather. Its resolution (how well it separates yes from no) is near zero, against 0.19 for the market. Large headroom for RL.
+- **The base model has no forecasting skill yet.** Its Brier score is worse than always saying 0.5 on economic questions and twice as bad as the base rate on weather. Its resolution (how well it separates yes from no) is near zero, against 0.19 for the market. Large headroom for RL.
 - **Context currently hurts** (0.272 with vs 0.253 without on econ). The model reads the recent values but doesn't turn them into a sensible probability.
 - **Its reasoning and its number often disagree.** Example (KXHIGHNY-26AUG13-T85): the model argued the high would likely be above 85°F, then answered `Probability: 0.02`.
 - **No internal consistency.** About half of adjacent ladder pairs go the wrong way (random would be 50%), and a weather day's brackets add up to about 3.1 instead of 1: it gives each bracket roughly 0.5.
