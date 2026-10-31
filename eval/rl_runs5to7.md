@@ -2,7 +2,7 @@
 
 Runs 5 and 6 repeat run 4 (key numbers, GRPO std scaling off) with training seeds 1 and 2. Run 7 is run 1 (plain prompt) with std scaling off, which completes the 2 × 2 of prompt × std scaling. All runs: Llama 3.2 3B Instruct, LoRA rank 32, Brier plus format reward, one pass of 347 steps at learning rate 1e-5, 4 answers per question; repo commit 0f576a3 (runs 5 to 7). Evaluation as before: 410 validation econ questions (36 releases), 360 held-out weather questions (60 days), 4 answers at temperature 0.7 averaged, with the eval days and sampling seed held fixed across runs.
 
-> **Note (29 October 2026, after outside review):** the intervals on this page resample single releases. Validation has only 13 independent announcements (series released together resolve together); announcement-level intervals, which leave every conclusion here unchanged, are in [`review_checks.md`](review_checks.md).
+> **Note (29 October 2026, after outside review):** the intervals on this page resample single releases. Validation has only 13 announcements (series released together resolve together); announcement-level intervals, which leave every conclusion here unchanged, are in [`review_checks.md`](review_checks.md).
 
 ## Results in brief
 
@@ -76,7 +76,7 @@ Bold: interval excludes 0.
 | Payrolls | 0.273 | 0.291 | 0.300 | 0.269 | 0.359 | 0.252 |
 | Fed decision (no key numbers) | 0.368 | 0.342 | 0.335 | 0.330 | 0.160 | 0.325 |
 
-All three seeds improve on the untrained model for core CPI (both), CPI year-over-year, the Fed funds rate and unemployment. Payrolls, the noisiest series, does not improve in any seed.
+All three seeds improve on the untrained model for core CPI (both), CPI year-over-year, the Fed funds rate and unemployment. Payrolls, the noisiest series, does not improve consistently: runs 4 and 5 are worse than the untrained model, and run 6 is slightly better (0.269 against 0.273).
 
 ## What this means
 

@@ -2,9 +2,9 @@
 
 An outside review of the paper draft asked for several checks. All of them use the saved validation answers; none needed new generation. Scripts: `analysis/review_checks.py`, `analysis/announcement_intervals_extra.py`, `analysis/gbm_baseline.py`.
 
-## 1. Independent announcements, not releases
+## 1. Announcements, not releases
 
-CPI's four series come out in one release, payrolls and unemployment share the jobs report, and the Fed rate and Fed decision share a meeting. So the 36 validation releases are only **13 independent announcements**; the test split also has 13. Resampling whole announcements leaves every conclusion unchanged, and the intervals are similar (`analysis/review_paired_bootstrap.csv`, both resampling units):
+CPI's four series come out in one release, payrolls and unemployment share the jobs report, and the Fed rate and Fed decision share a meeting. So the 36 validation releases form only **13 announcement clusters**; the test split also has 13. Resampling whole announcements leaves every conclusion unchanged, and the intervals are similar (`analysis/review_paired_bootstrap.csv`, both resampling units):
 
 | Comparison (validation econ) | Brier, announcements | Brier, releases | AUC, announcements | AUC, releases |
 | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ CPI's four series come out in one release, payrolls and unemployment share the j
 | Runs 4-6 vs untrained, best three-line prompt | −0.019 (−0.034 to +0.002) | **−0.019** (−0.036 to −0.001) | **+0.038** (+0.002 to +0.074) | **+0.038** (+0.002 to +0.073) |
 | Run 8 (shuffled) vs untrained, key numbers | **+0.035** (+0.011 to +0.054) | **+0.035** (+0.007 to +0.059) | **−0.048** (−0.105 to −0.008) | −0.048 (−0.100 to +0.003) |
 
-Bold: interval excludes 0. Each of runs 4, 5 and 6 alone still improves on the untrained model in both Brier and AUC with announcement-level intervals. With 13 announcements, these intervals are rough; that is the effective sample size. The test plan now resamples announcements (`test_plan.md`, third amendment, before scoring).
+Bold: interval excludes 0. Each of runs 4, 5 and 6 alone still improves on the untrained model in both Brier and AUC with announcement-level intervals. With 13 announcement clusters, these intervals are rough. They account for dependence within announcements but may not capture dependence across time: successive announcements share economic conditions and overlapping recent results. The test plan now resamples announcements (`test_plan.md`, third amendment, before scoring).
 
 ## 2. Unreadable answers
 

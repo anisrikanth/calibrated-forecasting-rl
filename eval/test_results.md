@@ -1,6 +1,6 @@
 # Test split: the one scored evaluation
 
-The test split was scored once on 30 October 2026 (Kaggle, one T4; the run started 00:28 UTC on 31 October), with `notebooks/phase4_test_eval.ipynb` at repo commit `7e515ef`, against the comparisons fixed in advance in `test_plan.md`. No model was retrained or changed: each run's saved LoRA adapter was loaded as it was, plus the untrained model.
+The test split was scored once on 30 October 2026 (Kaggle, one T4; the run started 00:28 UTC on 31 October), with `notebooks/phase4_test_eval.ipynb` at repo commit `7e515ef`, against the model comparisons fixed in advance in `test_plan.md`. The test questions were not entirely unseen: dry runs of the evaluation code had computed the baselines on them (see the timeline below). No model was retrained or changed: each run's saved LoRA adapter was loaded as it was, plus the untrained model.
 
 - **Questions:** 479 test questions with a market price (36 releases, 13 announcements, June to October 2026; yes-rate 0.409), out of 495 eligible.
 - **Models:** 11 (untrained with each prompt, runs 1 and 3 to 10; run 2 was optional and not attached).
@@ -95,6 +95,25 @@ Bold: best short of the market. Ranges are across the three seeds. `test_results
 - **Payrolls stayed the hard series.** Runs 4-6 score 0.261 to 0.284 there, the untrained model 0.256 and the logistic regression 0.317. The base rate (0.242) beats every method, the market included (0.265). The std-on runs, copying the latest payrolls result, score 0.43 to 0.48.
 - **Skill relative to the base rate:** market 0.70, trees 0.49, logistic regression 0.48, counting rule 0.44, runs 4-6 0.41 to 0.46, untrained key numbers 0.33, runs 3, 9, 10 0.22 to 0.28, run 8 0.09 (`test_skill_scores.csv`).
 - **Ladder violations** (431 adjacent threshold pairs): market 4%, logistic regression 4%, trees 1%, untrained key numbers 40%, runs 4-6 33% to 36%, runs 3, 9, 10 0% to 2%.
+
+## Timeline
+
+All times U.S. Eastern. Commits are in this repository; `test_plan.md` records each amendment and its reason.
+
+| When | Commit | Event |
+| --- | --- | --- |
+| 28 Oct, 22:14 | | First dry runs of the test notebook. They pair made-up model answers with the real baselines, so they compute and print the baselines' test scores (market price, base rate, rules, logistic regression). Dry runs continued through the revisions below. |
+| 29 Oct, 08:06 | `17b601b` | Plan and test notebook first committed. The plan stated, wrongly, that no baseline had been scored. |
+| 29 Oct, 08:25 | `f113ac1` | Amendment 1: P2 and S3 include run 10; P3's second criterion changed because validation run 10 did not meet the original one. |
+| 29 Oct, 08:57 | `10b109c` | Amendment 2: gradient-boosted trees (S8) added after a reviewer asked for a stronger baseline; settings chosen by cross-validation on the training questions. |
+| 29 Oct, 12:10 | `ba3e6ef` | Amendment 3, after an outside review: announcement-level intervals and wording. No prediction or threshold changed. |
+| 29 Oct, 12:45 | `ba3e6ef` | The loading check run alone on Kaggle: every model answered 80 validation questions; no test question was scored. |
+| 29 Oct, 13:26–13:38 | | Last dry runs: the notebook, the trees script in test mode (computing the trees' test scores) and the verdict script, all with made-up model answers. |
+| 29 Oct, 15:12 | `7e515ef` | Amendment 4: the baseline exposure disclosed; verdict script and the trees' test mode added; P3's wording matched to its computation. No prediction or threshold changed. |
+| 30 Oct, 20:28 | `7e515ef` | The scored run: the models' first answers to test questions. |
+| 30 Oct, 23:47 | `f35629a` | Results committed. |
+
+No language model answered a test question before the scored run. The baselines' test scores were available from the first dry run on, before the plan was first committed and before amendments 1 to 3, so they could have been seen when those amendments were made. The amendments' stated reasons are validation results and outside reviews, and every baseline's settings were fixed on training questions only.
 
 ## Files
 
