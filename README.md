@@ -1,6 +1,6 @@
 # Calibrated Forecasting with RL
 
-**When does RL with a proper scoring rule help a small language model forecast?** We train Llama 3.2 3B Instruct with GRPO and a Brier-score reward on resolved [Kalshi](https://kalshi.com) markets about U.S. economic releases. The evidence in every prompt is held fixed: the series' recent results, all public before the question. That lets us measure what RL changes against simple rules built from the same numbers. Paper draft: [`paper/`](paper/).
+**When does RL with a proper scoring rule help a small language model forecast?** We train Llama 3.2 3B Instruct with GRPO and a Brier-score reward on resolved [Kalshi](https://kalshi.com) markets about U.S. economic releases. The evidence in every prompt is held fixed: the series' recent results, all public before the question. That lets us measure what RL changes against simple rules built from the same numbers. Paper: [project page](https://anisrikanth.github.io/calibrated-forecasting-rl/) and [PDF](docs/paper.pdf); LaTeX source in [`paper/`](paper/).
 
 ## Research questions
 
